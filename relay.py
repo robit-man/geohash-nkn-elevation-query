@@ -3,21 +3,13 @@
 """
 NKN Elevation Forwarder — geohash-aware (drop-in), venv-bootstrapped.
 
-New:
-- Accepts geohashes via DM or /forward:
-    { "type":"elev.query", "geohashes":[ "9q8yyxk6p", ... ], "dataset":"mapzen", "prec": 9 }
-  or "geohashes":"gh|gh|gh" (pipe-delimited).
+New in this version:
+- 🔐 Persistent NKN identity: generates a seed once and saves it to NKN_SEED_FILE
+  (default sidecar/nkn.seed), then reuses it across restarts. You can still force
+  a specific key by setting NKN_SEED in .env.
 
-- Also accepts geohash strings inside "locations" (array or pipe-string). If tokens lack commas,
-  they are treated as geohashes automatically.
-
-- For geohash input, decodes → forwards to local ELEV, then RE-PACKAGES reply to:
-    { "results":[ {"geohash":"...","elevation":N}, ... ] }
-  (compact). For lat/lng input, returns unchanged upstream body (compat with existing clients).
-
-Existing behavior preserved for:
-    { "type":"elev.query", "locations":[{"lat":..,"lng":..},...], "dataset":"mapzen" }
-    { "type":"http.request", "method":"GET", "url":"/v1/<dataset>?locations=..." }
+Other notes:
+- Accepts geohashes or lat/lng over DM and HTTP (OpenTopoData-compatible).
 """
 
 from __future__ import annotations
@@ -65,6 +57,7 @@ if not SETUP_MKR.exists():
     print("[PROCESS] Installing Python dependencies…", flush=True)
     _pip("--upgrade", "pip")
     _pip("flask", "flask-cors", "python-dotenv", "requests", "waitress", "cryptography")
+
     # Write default .env
     env_path = SCRIPT_DIR / ".env"
     if not env_path.exists():
@@ -87,18 +80,23 @@ if not SETUP_MKR.exists():
             "ELEV_TIMEOUT_MS=10000\n"
             "\n"
             "NKN_IDENTIFIER=forwarder\n"
-            "NKN_SEED=\n"
+            "NKN_SEED=\n"                      # you can still hard-pin a seed here
+            "NKN_SEED_FILE=sidecar/nkn.seed\n" # ⬅ seed will be persisted here
             "NKN_SUBCLIENTS=4\n"
             "NKN_RPC_ADDRS=\n"
         )
         print("[SUCCESS] Wrote .env with defaults.", flush=True)
+
     # Sidecar files
     SIDE_DIR = SCRIPT_DIR / "sidecar"
     SIDE_DIR.mkdir(parents=True, exist_ok=True)
     (SIDE_DIR / ".gitignore").write_text("node_modules/\npackage-lock.json\n")
+
     pkg = SIDE_DIR / "package.json"
     if not pkg.exists():
         subprocess.check_call(["npm", "init", "-y"], cwd=str(SIDE_DIR))
+
+    # keep sidecar minimal; seed persistence is handled in Python before launch
     (SIDE_DIR / "sidecar.js").write_text(r"""
 const readline = require('readline');
 const { MultiClient } = require('nkn-sdk');
@@ -132,8 +130,10 @@ function ndj(obj){ try{ process.stdout.write(JSON.stringify(obj)+"\n"); }catch{}
   process.on('SIGTERM', async ()=>{ try{ await mc.close(); }catch{} process.exit(0); });
 })();
 """)
+
     print("[PROCESS] Installing Node sidecar dependency (nkn-sdk)…", flush=True)
     subprocess.check_call(["npm", "install", "nkn-sdk@latest", "--no-fund", "--silent"], cwd=str(SIDE_DIR))
+
     SETUP_MKR.write_text("ok")
     print("[SUCCESS] Setup complete. Restarting…", flush=True)
     os.execv(sys.executable, [sys.executable] + sys.argv)
@@ -167,11 +167,68 @@ ELEV_TIMEOUT_MS     = int(os.getenv("ELEV_TIMEOUT_MS", "10000"))
 
 NKN_IDENTIFIER      = os.getenv("NKN_IDENTIFIER", "forwarder")
 NKN_SEED            = os.getenv("NKN_SEED", "").strip()
+NKN_SEED_FILE       = os.getenv("NKN_SEED_FILE", "sidecar/nkn.seed").strip()  # ⬅ added
 NKN_SUBCLIENTS      = max(1, int(os.getenv("NKN_SUBCLIENTS", "4")))
 NKN_RPC_ADDRS       = [s.strip() for s in os.getenv("NKN_RPC_ADDRS","").split(",") if s.strip()]
 
 TLS_DIR             = SCRIPT_DIR / "tls"
 TLS_DIR.mkdir(exist_ok=True, parents=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2.1) Ensure a persistent NKN seed (so the address is stable across restarts)
+# ─────────────────────────────────────────────────────────────────────────────
+def _ensure_persisted_seed():
+    """
+    Ensures env var NKN_SEED is set, loading it from NKN_SEED_FILE or generating
+    a new one (via Node 'nkn-sdk' Wallet) and saving it to disk (0600).
+    """
+    global NKN_SEED
+    if NKN_SEED:
+        # explicit seed provided; do not overwrite file
+        print(f"[PROCESS] Using NKN_SEED from environment (length={len(NKN_SEED)}).", flush=True)
+        return
+
+    seed_path = (SCRIPT_DIR / NKN_SEED_FILE).resolve()
+    try:
+        if seed_path.exists():
+            seed = seed_path.read_text(encoding="utf-8").strip()
+            if seed:
+                os.environ["NKN_SEED"] = seed
+                NKN_SEED = seed
+                print(f"[PROCESS] Loaded persisted NKN seed from {seed_path}", flush=True)
+                return
+    except Exception as e:
+        print(f"[WARN] Could not read NKN_SEED_FILE: {e}", flush=True)
+
+    # Generate a seed using Node's nkn-sdk (so format is guaranteed)
+    SIDE_DIR = SCRIPT_DIR / "sidecar"
+    try:
+        cmd = [
+            "node", "-e",
+            r"""
+const { Wallet } = require('nkn-sdk');
+const w = new Wallet();
+const s = (typeof w.getSeed==='function') ? w.getSeed() : (w.seed || '');
+if (!s) { process.stderr.write('no-seed'); process.exit(1); }
+process.stdout.write(s);
+"""
+        ]
+        seed = subprocess.check_output(cmd, cwd=str(SIDE_DIR)).decode("utf-8", "ignore").strip()
+        if not seed:
+            raise RuntimeError("empty seed from wallet")
+        seed_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(seed_path, "w", encoding="utf-8") as f:
+            f.write(seed)
+        try:
+            os.chmod(seed_path, 0o600)
+        except Exception:
+            pass
+        os.environ["NKN_SEED"] = seed
+        NKN_SEED = seed
+        print(f"[SUCCESS] Generated and persisted new NKN seed at {seed_path}", flush=True)
+    except Exception as e:
+        print(f"[ERR] Failed to generate NKN seed using Node sidecar deps: {e}", flush=True)
+        # Sidecar will fall back to ephemeral if we proceed without a seed.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3) Small logging, rate limit, semaphore
@@ -219,12 +276,17 @@ class Sidecar:
     def start(self):
         if not shutil.which("node"):
             log("Node.js is required (not found on PATH).", "ERR"); sys.exit(1)
+
+        # Ensure we have a persistent seed before launching the sidecar:
+        _ensure_persisted_seed()
+
         env = os.environ.copy()
         env["NKN_IDENTIFIER"] = NKN_IDENTIFIER
-        env["NKN_SEED"] = NKN_SEED
+        env["NKN_SEED"] = os.getenv("NKN_SEED", "").strip()  # may be set by _ensure_persisted_seed()
         env["NKN_SUBCLIENTS"] = str(NKN_SUBCLIENTS)
         if NKN_RPC_ADDRS:
             env["NKN_RPC_ADDRS"] = ",".join(NKN_RPC_ADDRS)
+
         self.proc = subprocess.Popen(
             ["node", str(SIDECAR_JS)],
             cwd=str(SIDE_DIR),
@@ -313,16 +375,13 @@ def _parse_locations_or_geohashes(payload: Dict[str, Any]) -> Tuple[str, List[Tu
     # 2) locations as list/str — could be lat/lng or geohash strings
     locs = payload.get("locations")
     if isinstance(locs, list) and locs:
-        # If they're dicts with lat/lng, it's latlng mode.
         if isinstance(locs[0], dict) and ("lat" in locs[0]) and ("lng" in locs[0]):
             return "latlng", [(float(p["lat"]), float(p["lng"])) for p in locs], None
-        # Else, if strings, decide per token
         if isinstance(locs[0], str):
             toks = [t.strip() for t in locs if t.strip()]
             if toks and all(_looks_like_geohash_token(t) for t in toks):
                 latlng = [geohash_decode(g) for g in toks]
                 return "geohash", latlng, toks
-            # Maybe they are "lat,lng" strings
             pairs: List[Tuple[float,float]] = []
             for t in toks:
                 if "," not in t: raise ValueError("locations[] token missing comma")
@@ -335,7 +394,6 @@ def _parse_locations_or_geohashes(payload: Dict[str, Any]) -> Tuple[str, List[Tu
         if toks and all(_looks_like_geohash_token(t) for t in toks):
             latlng = [geohash_decode(g) for g in toks]
             return "geohash", latlng, toks
-        # Otherwise treat as lat,lng pairs
         pairs: List[Tuple[float,float]] = []
         for t in toks:
             a,b = t.split(",",1)
@@ -350,7 +408,6 @@ def _parse_locations_or_geohashes(payload: Dict[str, Any]) -> Tuple[str, List[Tu
 def _now_ms() -> int: return int(time.time()*1000)
 
 def _http_elev_query_from_latlng(latlng: List[Tuple[float,float]], dataset: Optional[str]) -> Dict[str, Any]:
-    """Builds locations=lat,lng|... and calls local OpenTopo; returns http.response-ish dict."""
     pairs = [f"{lat:.6f},{lng:.6f}" for (lat,lng) in latlng]
     loc_q = "|".join(pairs)
     ds = (dataset or ELEV_DATASET).strip() or ELEV_DATASET
@@ -399,24 +456,20 @@ def _handle_incoming_dm(src: str, payload_b64: str):
                 sidecar.send(src, base64.b64encode(json.dumps(reply).encode()).decode(), msg_id=mid or uuid.uuid4().hex)
                 return
 
-            # Forward to OpenTopo (always lat/lng upstream)
             with _CONC:
                 resp = _http_elev_query_from_latlng(latlng, dataset)
 
-            # If geohash mode, repackage body to {results:[{geohash,elevation}]}
             if mode == "geohash" and gh_list is not None:
                 try:
                     body_bytes = base64.b64decode(resp.get("body_b64") or b"")
                     upstream = json.loads(body_bytes.decode("utf-8","ignore") or "{}")
                     results = upstream.get("results") or []
-                    # assume same order as input; fallback map-by-rounded lat/lng if sizes mismatch
                     out = []
                     if len(results) == len(gh_list):
                         for gh, r in zip(gh_list, results):
                             elev = r.get("elevation", None)
                             out.append({"geohash": gh, "elevation": elev})
                     else:
-                        # build latlng -> elevation map
                         m = {}
                         for r in results:
                             loc = r.get("location") or {}
@@ -430,7 +483,6 @@ def _handle_incoming_dm(src: str, payload_b64: str):
                     resp["headers"] = dict(resp.get("headers") or {})
                     resp["headers"]["content-type"] = "application/json"
                 except Exception as e:
-                    # If repackaging fails, pass through upstream body as-is
                     log(f"repack failed (geohash mode): {e}", "WARN")
 
             reply = {"id": mid or uuid.uuid4().hex, "type":"http.response", **resp}
@@ -451,14 +503,12 @@ def _handle_incoming_dm(src: str, payload_b64: str):
                 return
             dataset = m.group(1)
             locs_q = requests.utils.unquote(m.group(2))
-            # If 'locations' string contains no commas, treat as geohashes pipe
             try:
                 if "|" in locs_q and ("," not in locs_q):
                     gh_list = [t for t in locs_q.split("|") if t.strip()]
                     latlng = [geohash_decode(g) for g in gh_list]
                     with _CONC:
                         resp = _http_elev_query_from_latlng(latlng, dataset)
-                    # Repack to geohash results
                     try:
                         body_bytes = base64.b64decode(resp.get("body_b64") or b"")
                         upstream = json.loads(body_bytes.decode("utf-8","ignore") or "{}")
@@ -484,9 +534,8 @@ def _handle_incoming_dm(src: str, payload_b64: str):
                     reply = {"id": mid or uuid.uuid4().hex, "type":"http.response", **resp}
                     sidecar.send(src, base64.b64encode(json.dumps(reply).encode()).decode(), msg_id=mid or uuid.uuid4().hex)
                     return
-                # Otherwise treat as standard lat,lng list and proxy unchanged
                 pairs = [t for t in locs_q.split("|") if t.strip()]
-                _ = [tuple(map(float, p.split(",",1))) for p in pairs]  # validate
+                _ = [tuple(map(float, p.split(",",1))) for p in pairs]
                 with _CONC:
                     resp = _http_elev_query_from_latlng(_, dataset)
                 reply = {"id": mid or uuid.uuid4().hex, "type":"http.response", **resp}
@@ -545,7 +594,6 @@ def forward():
     if not dest:
         return jsonify({"error":"dest required"}), 400
 
-    # Accept either locations or geohashes
     try:
         mode, latlng, gh_list = _parse_locations_or_geohashes(data)
     except Exception as e:
@@ -605,6 +653,7 @@ def _get_all_sans():
     return sorted(dns), sorted(ip)
 
 def _generate_self_signed(cert_file: Path, key_file: Path):
+    from cryptography.hazmat.primitives.asymmetric import rsa
     keyobj = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     dns_sans, ip_sans = _get_all_sans()
     san_list = [DNSName(d) for d in dns_sans]
