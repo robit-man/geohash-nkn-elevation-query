@@ -28,8 +28,8 @@
   </script>
 
   <style>
-    *{
-    box-sizing: border-box;}
+    *{box-sizing: border-box;}
+    a{color:var(--accent);text-decoration:none}
     :root { --bg:#0b0f14; --card:#121923; --ink:#e8eef7; --muted:#9eb0c7; --accent:#6ee7ff; --ok:#7ee787; --bad:#ff6b6b; }
     html,body{height:100%}
     body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;}
@@ -57,12 +57,13 @@
     .rangeRow{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
     input[type=range]{width:100%}
     .muted{color:var(--muted);font-size:12px}
-    .modeToggle{display:inline-flex;gap:8px;align-items:center}
+    .modeToggle{display:inline-flex;gap:8px;align-items:center;margin-bottom:8px;}
   </style>
 </head>
 <body>
 <div class="wrap">
   <h1>NKN Elevation Topo — Progressive Live (coarse→fine, Morton-ordered) with Geohash/LatLng toggle</h1>
+ <a href="https://www.opentopodata.org/datasets/mapzen/" target="_blank"><h3>Fetch and host the mapzen open topo data ~ 1.7 TB</h3></a>
   <div class="grid">
     <div class="card">
       <div class="row2">
