@@ -2,7 +2,8 @@
 
 This forwarder lets you request elevation samples either **directly over HTTP** (OpenTopoData-style) or **via NKN DMs** (batched, chunked, correlation-ID replies). It supports **lat/lng** and **geohash** payloads.
 
-<img width="1303" height="1499" alt="image" src="https://github.com/user-attachments/assets/ee5bdb0e-df60-476d-8e74-f19107595707" />
+<img width="1293" height="1473" alt="image" src="https://github.com/user-attachments/assets/5601ca64-a295-4dc3-ae68-687a115b02e2" />
+
 
 ---
 
