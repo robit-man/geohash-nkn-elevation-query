@@ -7,7 +7,7 @@ This forwarder lets you request elevation samples either **directly over HTTP** 
 
 ---
 
-## 1) HTTP (OpenTopoData style)
+## 1) HTTP ([OpenTopoData](https://www.opentopodata.org/#host-your-own) style)
 
 **Route**
 
@@ -70,7 +70,7 @@ curl "http://localhost:5000/v1/mapzen?geohashes=u6g5m2wnt|c20wj5b3x&enc=geohash&
 
 ---
 
-## 2) NKN DM (batched; preferred for large jobs)
+## 2) [NKN](https://nkn.org/) DM (batched; preferred for large jobs)
 
 Send a JSON envelope to your relay’s NKN address. The forwarder performs the HTTP call and replies with a correlated message.
 
@@ -88,7 +88,7 @@ Send a JSON envelope to your relay’s NKN address. The forwarder performs the H
 }
 ```
 
-**Request (geohash)**
+**Request ([geohash](https://en.wikipedia.org/wiki/Geohash))**
 
 ```json
 {
