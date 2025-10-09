@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NKN + OSM + Three.js — Hex draw + Radial Progressive Resolution + Texture Overlay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Leaflet (OSM) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet.draw (we extend it with L.Draw.Hexagon) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+  <!-- NKN SDK UMD (global `nkn`) with fallback -->
+  <script src="https://cdn.jsdelivr.net/gh/nknorg/nkn-sdk-js/dist/nkn.min.js"
+          onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/nkn-sdk/dist/nkn.min.js';document.head.appendChild(s);}())"></script>
+
+  <!-- three.js + Delaunator via importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@latest/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@latest/examples/jsm/",
+      "delaunator": "https://esm.sh/delaunator@5"
+    }
+  }
+  </script>
+
+  <style>
+    *{box-sizing: border-box;}
+    a{color:var(--accent);text-decoration:none}
+    :root { --bg:#0b0f14; --card:#121923; --ink:#e8eef7; --muted:#9eb0c7; --accent:#6ee7ff; --ok:#7ee787; --bad:#ff6b6b; }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;}
+    .wrap{max-width:1200px;margin:24px auto;padding:16px}
+    .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:16px}
+    .card{background:var(--card);border:1px solid #1e2a36;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:16px}
+    h1{font-size:20px;margin:0 0 10px}
+    label{display:block;margin:10px 0 6px;color:var(--muted)}
+    input[type=text], input[type=number], textarea{
+      width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2a3a4e;background:#0e1420;color:var(--ink);outline:none}
+    textarea{min-height:120px;max-height:300px}
+    input:focus, textarea:focus{border-color:var(--accent)}
+    .row4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;align-items:end}
+    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end}
+    .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .btn{margin-top:10px;display:inline-flex;align-items:center;gap:8px;border:1px solid #2a3a4e;background:#0e1420;color:var(--ink);padding:9px 12px;border-radius:12px;cursor:pointer}
+    .btn[disabled]{opacity:.55;cursor:not-allowed}
+    .btn:hover{border-color:var(--accent)}
+    .status{margin-top:8px;font-size:12px;color:var(--muted)}
+    .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#0e1420;border:1px solid #2a3a4e}
+    pre{white-space:pre-wrap;background:#0c1118;border:1px solid #1f2c3b;border-radius:12px;padding:12px;max-height:260px;overflow:auto}
+    .ok{color:var(--ok)} .bad{color:var(--bad)}
+    #map{height:420px;border-radius:12px;overflow:hidden;border:1px solid #1e2a36}
+    #threeWrap{height:500px;border-radius:12px;overflow:hidden;border:1px solid #1e2a36;background:#0c1118}
+    .rangeRow{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+    input[type=range]{width:100%}
+    .muted{color:var(--muted);font-size:12px}
+    .modeToggle{display:inline-flex;gap:8px;align-items:center;margin-bottom:8px;}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NKN Elevation Topo — Hex draw + <em>Radial</em> Progressive Resolution + Sealed Triangulation + Map Texture</h1>
+  <a href="https://www.opentopodata.org/datasets/mapzen/" target="_blank"><h3>Fetch and host the mapzen open topo data ~ 1.7 TB</h3></a>
+  <div class="grid">
+    <div class="card">
+      <div class="row2">
+        <div>
+          <label for="relay">Relay address (saved)</label>
+          <input id="relay" type="text" placeholder="forwarder.… or pubkey" />
+        </div>
+        <div>
+          <label for="dataset">Dataset</label>
+          <input id="dataset" type="text" value="mapzen" />
+        </div>
+      </div>
+
+      <div class="row3">
+        <div>
+          <label for="nx">Rows (approx)</label>
+          <input id="nx" type="number" min="0" max="4096" step="1" value="0" />
+        </div>
+        <div>
+          <label for="ny">Cols (approx)</label>
+          <input id="ny" type="number" min="0" max="4096" step="1" value="0" />
+        </div>
+        <div>
+          <label for="zScale">Z exaggeration</label>
+          <input id="zScale" type="number" step="0.1" value="1.0" />
+        </div>
+      </div>
+
+      <!-- Radial spacing controls -->
+      <label>Center spacing (m) — finest at hex center</label>
+      <div class="rangeRow">
+        <span class="muted">1m</span>
+        <input id="spacingCenter" type="range" min="1" max="200" step="1" value="1" />
+        <span id="spacingCenterVal" class="muted">1 m</span>
+      </div>
+
+      <label>Edge spacing (m) — coarsest at hex boundary</label>
+      <div class="rangeRow">
+        <span class="muted">5m</span>
+        <input id="spacingEdge" type="range" min="5" max="1000" step="5" value="100" />
+        <span id="spacingEdgeVal" class="muted">100 m</span>
+      </div>
+
+      <label>Falloff exponent (1 = linear, >1 = more exponential)</label>
+      <div class="rangeRow">
+        <span class="muted">0.3</span>
+        <input id="falloffExp" type="range" min="0.3" max="5" step="0.1" value="1.5" />
+        <span id="falloffExpVal" class="muted">1.5×</span>
+      </div>
+      <div class="muted">Spacing grows with distance from center: <code>s(ρ) = s<sub>center</sub> + (s<sub>edge</sub> - s<sub>center</sub>) · ρ<sup>γ</sup></code>, where ρ∈[0,1].</div>
+
+      <div class="row2">
+        <button id="regenBtn" class="btn">🔁 Regenerate from sliders</button>
+        <button id="drawBtn" class="btn">⬢ Draw hexagon</button>
+      </div>
+
+      <div class="row2">
+        <button id="locBtn" class="btn">📍 Use my location</button>
+        <button id="queryBtn" class="btn" disabled>🚀 Query progressive elevation via NKN</button>
+      </div>
+
+      <div class="modeToggle">
+        <button id="toggleModeBtn" class="btn">📦 Send as: Geohash</button>
+        <span id="modeHint" class="muted">Toggle to switch between geohash and lat/lng payloads.</span>
+      </div>
+
+      <label>Texture overlay</label>
+      <div class="row2">
+        <button id="textureToggleBtn" class="btn">🖼️ Overlay map texture: Off</button>
+        <input id="tileTemplate" type="text" value="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      </div>
+      <div class="muted">Tile server must allow CORS for canvas extraction. Keep {s},{z},{x},{y}. Toggle to remove.</div>
+
+      <div id="map"></div>
+
+      <label for="pointsBox">Bulk points (pipe-separated: <code>lat,lng|lat,lng|…</code>)</label>
+      <textarea id="pointsBox" placeholder="lat,lng|lat,lng|…"></textarea>
+
+      <div class="status">
+        <div>My NKN address: <span id="myAddr" class="tag">—</span></div>
+        <div>Connection: <span id="conn" class="tag">initializing…</span></div>
+        <div id="sdkStatus" class="status">Loading nkn-sdk…</div>
+        <div id="pointCount" class="status"></div>
+        <div id="progress" class="status"></div>
+        <div id="levelInfo" class="status"></div>
+        <div id="texInfo" class="status"></div>
+      </div>
+
+      <label>Logs</label>
+      <pre id="log"></pre>
+    </div>
+
+    <div class="card">
+      <label>3D Topography (variable density triangular mesh; hex footprint)</label>
+      <div id="threeWrap"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import Delaunator from 'delaunator';
+
+(function(){
+  // ---------- DOM ----------
+  const logEl = document.getElementById('log');
+  const relayEl = document.getElementById('relay');
+  const datasetEl = document.getElementById('dataset');
+  const nxEl = document.getElementById('nx');
+  const nyEl = document.getElementById('ny');
+  const zScaleEl = document.getElementById('zScale');
+
+  const spacingCenterEl = document.getElementById('spacingCenter');
+  const spacingEdgeEl   = document.getElementById('spacingEdge');
+  const falloffExpEl    = document.getElementById('falloffExp');
+  const spacingCenterVal= document.getElementById('spacingCenterVal');
+  const spacingEdgeVal  = document.getElementById('spacingEdgeVal');
+  const falloffExpVal   = document.getElementById('falloffExpVal');
+
+  const locBtn = document.getElementById('locBtn');
+  const drawBtn = document.getElementById('drawBtn');
+  const regenBtn = document.getElementById('regenBtn');
+  const queryBtn = document.getElementById('queryBtn');
+  const myAddrEl = document.getElementById('myAddr');
+  const connEl = document.getElementById('conn');
+  const sdkStatus = document.getElementById('sdkStatus');
+  const pointsBox = document.getElementById('pointsBox');
+  const pointCountEl = document.getElementById('pointCount');
+  const progressEl = document.getElementById('progress');
+  const levelInfoEl = document.getElementById('levelInfo');
+  const texInfoEl = document.getElementById('texInfo');
+  const threeWrap = document.getElementById('threeWrap');
+  const toggleModeBtn = document.getElementById('toggleModeBtn');
+  const modeHint = document.getElementById('modeHint');
+  const textureToggleBtn = document.getElementById('textureToggleBtn');
+  const tileTemplateEl = document.getElementById('tileTemplate');
+
+  // ---------- meters-per-degree helpers ----------
+  function metersPerDegLat(phiRad){
+    return 111132.954 - 559.822*Math.cos(2*phiRad) + 1.175*Math.cos(4*phiRad) - 0.0023*Math.cos(6*phiRad);
+  }
+  function metersPerDegLon(phiRad){
+    return 111412.84*Math.cos(phiRad) - 93.5*Math.cos(3*phiRad) + 0.118*Math.cos(5*phiRad);
+  }
+
+  // ---------- Web Mercator helpers for tiling ----------
+  const TILE = 256;
+  function lon2x(lon, z){ return ((lon + 180) / 360) * (TILE * (1<<z)); }
+  function lat2y(lat, z){
+    const s = Math.sin(lat * Math.PI/180);
+    return (0.5 - Math.log((1+s)/(1-s)) / (4*Math.PI)) * (TILE * (1<<z));
+  }
+  function groundResMpp(lat, z){
+    const C = 40075016.68557849; // eq. circumference (m)
+    return Math.cos(lat*Math.PI/180) * C / (TILE * (1<<z));
+  }
+  function pickZoomForTarget(lat, targetMpp, maxTexDim, hexLatLngs){
+    let best = 19;
+    for (let z=19; z>=0; z--){
+      const mpp = groundResMpp(lat, z);
+      let minx=Infinity,maxx=-Infinity,miny=Infinity,maxy=-Infinity;
+      for (const ll of hexLatLngs){
+        const px = lon2x(ll.lng, z);
+        const py = lat2y(ll.lat, z);
+        if (px<minx) minx=px; if (px>maxx) maxx=px;
+        if (py<miny) miny=py; if (py>maxy) maxy=py;
+      }
+      const W = Math.ceil(maxx-minx), H = Math.ceil(maxy-miny);
+      if (mpp <= targetMpp && W<=maxTexDim && H<=maxTexDim){ best = z; break; }
+    }
+    return best;
+  }
+
+  // ---------- Mode toggle (persisted) ----------
+  const LS_RELAY='nkn.forwarder.dest', LS_DATASET='nkn.forwarder.dataset', LS_MODE='nkn.forwarder.mode';
+  relayEl.value = localStorage.getItem(LS_RELAY) || '';
+  datasetEl.value = localStorage.getItem(LS_DATASET) || (datasetEl.value || 'mapzen');
+  relayEl.addEventListener('change', ()=>localStorage.setItem(LS_RELAY, relayEl.value.trim()));
+  datasetEl.addEventListener('change', ()=>localStorage.setItem(LS_DATASET, datasetEl.value.trim()));
+  let SEND_MODE = localStorage.getItem(LS_MODE) || 'geohash';
+  function renderMode(){
+    toggleModeBtn.textContent = (SEND_MODE==='geohash') ? '📦 Send as: Geohash' : '📦 Send as: Lat/Lng';
+    modeHint.textContent = (SEND_MODE==='geohash')
+      ? 'Using geohash payloads (compact). Click to switch to lat/lng.'
+      : 'Using lat/lng payloads. Click to switch to geohash.';
+  }
+  renderMode();
+  toggleModeBtn.addEventListener('click', ()=>{
+    SEND_MODE = (SEND_MODE==='geohash') ? 'latlng' : 'geohash';
+    localStorage.setItem(LS_MODE, SEND_MODE);
+    renderMode();
+  });
+
+  // ---------- utils ----------
+  function log(...args){
+    const line = args.map(a => typeof a === 'string' ? a : JSON.stringify(a, null, 2)).join(' ');
+    logEl.textContent += line + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(...args);
+  }
+  function setConn(txt, ok){
+    connEl.textContent = txt;
+    connEl.style.borderColor = ok ? 'rgba(126,231,135,.6)' : '#2a3a4e';
+    connEl.style.color = ok ? 'var(--ok)' : 'var(--muted)';
+    queryBtn.disabled = !ok;
+  }
+  function requireSDK(){
+    if (!window.nkn || !nkn.MultiClient) {
+      sdkStatus.innerHTML = '<span class="bad">nkn-sdk not loaded. Check CDN.</span>';
+      throw new Error('nkn-sdk not loaded');
+    }
+    sdkStatus.innerHTML = '<span class="ok">nkn-sdk loaded.</span>';
+  }
+  function splitTokens(text){
+    if (!text) return [];
+    return text.replace(/\r/g,'').split(/\s*\|\s*|\n+/).map(s=>s.trim()).filter(Boolean);
+  }
+  function countPointsBox(){
+    const n = splitTokens(pointsBox.value).length;
+    pointCountEl.textContent = n ? (n + ' points prepared (radial variable density)') : '';
+  }
+
+  function updateSliderLabels(){
+    spacingCenterVal.textContent = `${spacingCenterEl.value} m`;
+    spacingEdgeVal.textContent   = `${spacingEdgeEl.value} m`;
+    falloffExpVal.textContent    = `${falloffExpEl.value}×`;
+  }
+  updateSliderLabels();
+  [spacingCenterEl, spacingEdgeEl, falloffExpEl].forEach(el=>{
+    el.addEventListener('input', ()=>{
+      updateSliderLabels();
+      if (lastHex) generateHexGrid(lastHex);
+    });
+  });
+
+  // ---------- Geohash ----------
+  const GH32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+  function geohashEncode(lat, lon, precision=9){
+    let bit=0, even=true, latMin=-90,latMax=90,lonMin=-180,lonMax=180, ch=0, hash='';
+    while (hash.length < precision){
+      if (even){ const mid=(lonMin+lonMax)/2; if (lon > mid){ ch |= (1<<(4-bit)); lonMin=mid; } else { lonMax=mid; } }
+      else { const mid=(latMin+latMax)/2; if (lat > mid){ ch |= (1<<(4-bit)); latMin=mid; } else { latMax=mid; } }
+      even=!even;
+      if (bit<4){ bit++; } else { hash += GH32[ch]; bit=0; ch=0; }
+    }
+    return hash;
+  }
+  function pickGeohashPrecision(spacingM){
+    if (spacingM >= 1500) return 6;
+    if (spacingM >= 300)  return 7;
+    if (spacingM >= 60)   return 8;
+    if (spacingM >= 10)   return 9;
+    return 10;
+  }
+
+  // ---------- Leaflet map ----------
+  let map, meMarker, hexLayer=null, lastHex=null;
+
+  function initMap(){
+    map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    map.setView([37.7749, -122.4194], 11);
+  }
+
+  function useMyLocation(){
+    if (!navigator.geolocation) { log('⚠️ Geolocation not available'); return; }
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const { latitude:lat, longitude:lng } = pos.coords;
+      map.setView([lat,lng], 12);
+      if (meMarker) { map.removeLayer(meMarker); }
+      meMarker = L.marker([lat,lng]).addTo(map).bindPopup('You are here').openPopup();
+    }, err=> log('⚠️ Geolocation error:', err.message||err));
+  }
+
+  // ---------- Custom Leaflet.draw tool: L.Draw.Hexagon (center-drag) ----------
+  (function(){
+    const SimpleShape = L.Draw.SimpleShape || L.Draw.Rectangle.prototype;
+    L.Draw.Hexagon = SimpleShape.extend({
+      statics: { TYPE: 'hexagon' },
+      options: { shapeOptions: { color:'#6ee7ff', weight:2 } },
+      initialize: function(map, options){
+        this.type = L.Draw.Hexagon.TYPE;
+        L.Draw.SimpleShape.prototype.initialize.call(this, map, options);
+      },
+      _drawShape: function(latlng){
+        const center = this._startLatLng;
+        const phiC = center.lat * Math.PI/180;
+        const mDegLatC = metersPerDegLat(phiC);
+        const xM = (latlng.lng - center.lng) * metersPerDegLon(phiC);
+        const yM = (latlng.lat - center.lat) * mDegLatC;
+        const a = Math.max(5, Math.hypot(xM, yM)); // apothem (m)
+        this._lastApothemM = a;
+        const R = 2 * a / Math.sqrt(3);
+        const verts = [];
+        for (let k=0;k<6;k++){
+          const th = (Math.PI/3)*k;          // flat-top
+          const vx = R*Math.cos(th), vy = R*Math.sin(th);
+          const latV = center.lat + vy / mDegLatC;
+          const phiV = latV * Math.PI/180;
+          const mDegLonV = metersPerDegLon(phiV);
+          const lngV = center.lng + vx / mDegLonV;
+          verts.push([latV, lngV]);
+        }
+        if (!this._shape){ this._shape = L.polygon(verts, this.options.shapeOptions); this._map.addLayer(this._shape); }
+        else { this._shape.setLatLngs(verts); }
+      },
+      _fireCreatedEvent: function(){
+        const layer = L.polygon(this._shape.getLatLngs(), this.options.shapeOptions);
+        layer._hexCenter = this._startLatLng;
+        layer._apothemM  = this._lastApothemM || 0;
+        L.Draw.Feature.prototype._fireCreatedEvent.call(this, layer);
+      }
+    });
+  })();
+
+  let drawHandler = null;
+  function startDrawHexagon(){
+    if (!drawHandler) drawHandler = new L.Draw.Hexagon(map, { shapeOptions: { color:'#6ee7ff', weight:2 } });
+    drawHandler.enable();
+  }
+
+  // ---------- Hex helpers ----------
+  const C30 = Math.cos(Math.PI/6), S30 = Math.sin(Math.PI/6);
+
+  function insideHexXY(x,y,a){ // using apothem 'a'
+    if (Math.abs(y) > a) return false;
+    if (Math.abs( x*C30 + y*S30 ) > a) return false;
+    if (Math.abs(-x*C30 + y*S30 ) > a) return false;
+    return true;
+  }
+
+  // ---------- Build dense boundary samples to seal edges ----------
+  function buildBoundarySamples(d, lat0, lng0, a){
+    const R = 2*a/Math.sqrt(3);
+    const verts = [];
+    for (let k=0;k<6;k++){
+      const th=(Math.PI/3)*k;
+      verts.push({x:R*Math.cos(th), y:R*Math.sin(th)});
+    }
+    const step = Math.max(1, d*0.5);
+    const ring = [];
+    const mDegLatC = metersPerDegLat(lat0*Math.PI/180);
+    for (let k=0;k<6;k++){
+      const a0=verts[k], a1=verts[(k+1)%6];
+      const L = Math.hypot(a1.x-a0.x, a1.y-a0.y);
+      const nSeg = Math.max(1, Math.ceil(L/step));
+      for (let s=0; s<=nSeg; s++){
+        const t = s/nSeg;
+        const x = a0.x*(1-t) + a1.x*t;
+        const y = a0.y*(1-t) + a1.y*t;
+        const lat = lat0 + y / mDegLatC;
+        const mDegLonRow = metersPerDegLon(lat*Math.PI/180);
+        const lng = lng0 + x / mDegLonRow;
+        ring.push({x, y, lat, lng, aux:true});
+      }
+    }
+    return ring;
+  }
+
+  // ---------- Radial function for spacing ----------
+  function spacingAtRho(rho, s0, s1, gamma){
+    rho = Math.min(1, Math.max(0, rho));
+    return s0 + (s1 - s0) * Math.pow(rho, gamma);
+  }
+
+  // ---------- Generate variable-density points inside the hex ----------
+  function generateHexGrid(hex){
+    if (!hex) return;
+    const { center:{lat:lat0, lng:lng0}, apothemM:a } = hex;
+    const R  = 2 * a / Math.sqrt(3); // circumradius (m)
+    const phi0 = lat0 * Math.PI/180;
+    const mDegLatC = metersPerDegLat(phi0);
+
+    const sCenter = Math.max(0.5, parseFloat(spacingCenterEl.value||'1'));
+    const sEdge   = Math.max(sCenter+0.5, parseFloat(spacingEdgeEl.value||'100'));
+    const gamma   = Math.max(0.3, parseFloat(falloffExpEl.value||'1.5'));
+
+    const ptsLocal = [];
+
+    // rows: start at center, march ±y with step ry(y) = √3/2 * s(|y|/R)
+    let rows = [];
+    let y = 0;
+    let parity = 0;
+    while (true){
+      const rhoRow = Math.min(1, Math.abs(y)/R);
+      const dRow   = spacingAtRho(rhoRow, sCenter, sEdge, gamma);
+      const ry     = Math.sqrt(3)/2 * dRow;
+
+      for (const yy of (y===0 ? [0] : [y, -y])){
+        const lat = lat0 + yy / mDegLatC;
+        const mDegLonRow = metersPerDegLon(lat * Math.PI/180);
+        const xOffset = (parity & 1) ? 0.5 * dRow : 0.0;
+        for (let x = -R - 2*dRow; x <= R + 2*dRow; x += dRow){
+          const xx = x + xOffset;
+          if (!insideHexXY(xx, yy, a)) continue;
+          const lng = lng0 + xx / mDegLonRow;
+          ptsLocal.push({ x:xx, y:yy, lat, lng, core:true, r: Math.hypot(xx, yy) });
+        }
+      }
+      y += ry;
+      parity++;
+      if (y > a) break;
+    }
+
+    nxEl.value = String(parity);
+    nyEl.value = String('—');
+
+    const boundary = buildBoundarySamples(Math.max(2, sCenter), lat0, lng0, a);
+
+    pointsBox.value = ptsLocal.map(p=>`${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join('|');
+    countPointsBox();
+
+    if (!hexLayer){
+      const RdegX = R / metersPerDegLon(phi0), RdegY = a / mDegLatC;
+      map.fitBounds([[lat0-RdegY, lng0-RdegX], [lat0+RdegY, lng0+RdegX]], { padding:[20,20] });
+    }
+
+    log(`🧮 Radial lattice: points=${ptsLocal.length}, s0=${sCenter}m → s1=${sEdge}m, γ=${gamma}`);
+
+    lastGenerated = { core: ptsLocal, boundary, R, a, sCenter, sEdge, gamma };
+  }
+
+  // ---------- NKN ----------
+  const pending = new Map();
+  let thePayloadBytes = 0;
+  function uuidv4(){
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+      const r = Math.random()*16|0, v = c==='x'?r:(r&0x3|0x8); return v.toString(16);
+    });
+  }
+  function sendWithReply(mc, dest, obj, timeoutMs=25000) {
+    const id = obj.id || uuidv4(); obj.id = id;
+    thePayloadBytes = new TextEncoder().encode(JSON.stringify(obj)).length;
+    const p = new Promise((resolve, reject)=>{
+      const t = setTimeout(()=>{ pending.delete(id); reject(new Error('DM reply timeout')); }, timeoutMs);
+      pending.set(id, { resolve, timeout: t });
+    });
+    mc.send(dest, JSON.stringify(obj)).then(()=>{
+      log('📤 sent DM', { id, bytes: thePayloadBytes, dest });
+    }).catch(err=>{
+      const st = pending.get(id); if (st){ clearTimeout(st.timeout); pending.delete(id); }
+      log('❌ send error:', err && err.message || err);
+    });
+    return p;
+  }
+  function handleIncoming(src, payload){
+    const text = (typeof payload==='string') ? payload : new TextDecoder().decode(payload);
+    let msg; try { msg = JSON.parse(text); } catch { log('📥 incoming (raw):', text); return; }
+    if (msg && msg.type === 'http.response' && msg.id && pending.has(msg.id)) {
+      const st = pending.get(msg.id); clearTimeout(st.timeout); pending.delete(msg.id); st.resolve(msg); return;
+    }
+    log('📥 unsolicited from', src, msg);
+  }
+
+  // ---------- Three.js (sealed triangulation, Z flip) ----------
+  let renderer, camera, controls, scene, mesh, geom, posAttr, colorAttr, elevs, isFinal, minY, maxY;
+  let pts = []; // core + boundary
+  let idxByLL, idxByGH;
+  let neighbors = [];
+  let overlayOn = false, currentTexture = null, currentZoom = 0;
+
+  function initThree(){
+    const w = threeWrap.clientWidth, h = threeWrap.clientHeight;
+    renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+    threeWrap.innerHTML = '';
+    threeWrap.appendChild(renderer.domElement);
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0c1118);
+
+    camera = new THREE.PerspectiveCamera(50, w/h, 0.1, 1e7);
+    camera.position.set(0, 800, 800);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0,0,0);
+    controls.update();
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x404040, 0.8);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(500, 1000, 500);
+    scene.add(dir);
+
+    animate();
+    window.addEventListener('resize', onResize);
+  }
+  function onResize(){
+    const w = threeWrap.clientWidth, h = threeWrap.clientHeight;
+    if (!renderer) return;
+    renderer.setSize(w, h);
+    camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+  let lastSmoothMS = 0;
+  const SMOOTH_INTERVAL_MS = 45;
+  const SMOOTH_PASSES_PER_TICK = 1;
+  function animate(){
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    if (geom && now - lastSmoothMS >= SMOOTH_INTERVAL_MS) {
+      smoothUnknowns(SMOOTH_PASSES_PER_TICK);
+      geom.computeVertexNormals();
+      lastSmoothMS = now;
+    }
+    if (renderer && scene && camera) renderer.render(scene, camera);
+  }
+
+  function buildHexMesh(core, boundary, a){
+    // pts = core + boundary (aux)
+    pts = core.concat(boundary);
+    const N = pts.length;
+
+    // Triangulate in (x, y) local meters using Delaunator and keep only inside-hex triangles
+    const dela = Delaunator.from(pts, p=>p.x, p=>p.y);
+    const tri = dela.triangles;
+    const tris = [];
+    for (let t=0; t<tri.length; t+=3){
+      const ia=tri[t], ib=tri[t+1], ic=tri[t+2];
+      const ax=pts[ia].x, ay=pts[ia].y;
+      const bx=pts[ib].x, by=pts[ib].y;
+      const cx=pts[ic].x, cy=pts[ic].y;
+      const cxn = (ax+bx+cx)/3, cyn = (ay+by+cy)/3;
+      if (insideHexXY(cxn, cyn, a)) { tris.push(ia, ib, ic); }
+    }
+
+    // Build geometry (Z is flipped: z = -y)
+    const pos = new Float32Array(N*3);
+    let minX=+Infinity, maxX=-Infinity, minZ=+Infinity, maxZ=-Infinity;
+    for (let k=0;k<N;k++){
+      const i3 = k*3;
+      pos[i3+0] = pts[k].x;
+      pos[i3+1] = 0;
+      pos[i3+2] = -pts[k].y; // flip north/south
+      if (pos[i3+0]<minX) minX=pos[i3+0]; if (pos[i3+0]>maxX) maxX=pos[i3+0];
+      if (pos[i3+2]<minZ) minZ=pos[i3+2]; if (pos[i3+2]>maxZ) maxZ=pos[i3+2];
+    }
+    const cx = 0.5*(minX+maxX), cz = 0.5*(minZ+maxZ);
+    for (let k=0;k<N;k++){ pos[k*3+0]-=cx; pos[k*3+2]-=cz; }
+
+    const colors = new Float32Array(N*3);
+    for (let k=0;k<N;k++){ colors[k*3+0]=0.22; colors[k*3+1]=0.26; colors[k*3+2]=0.36; }
+
+    geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geom.setIndex(tris);
+    geom.computeVertexNormals();
+
+    posAttr   = geom.getAttribute('position');
+    colorAttr = geom.getAttribute('color');
+
+    const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, vertexColors: true, roughness: 0.92, metalness: 0.0, map: null });
+    if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+    mesh = new THREE.Mesh(geom, mat);
+    scene.add(mesh);
+
+    const widthM  = (maxX - minX) || 1;
+    const heightM = (maxZ - minZ) || 1;
+    const maxSpan = Math.max(widthM, heightM);
+    controls.target.set(0,0,0);
+    camera.position.set(0, Math.max(800, maxSpan*0.9), Math.max(800, maxSpan*0.9));
+    controls.update();
+
+    elevs   = new Array(N).fill(NaN);
+    isFinal = new Array(N).fill(false);
+    minY = +Infinity; maxY = -Infinity;
+
+    neighbors = Array.from({length:N}, ()=>new Set());
+    const idx = geom.getIndex().array;
+    for (let t=0;t<idx.length;t+=3){
+      const a=idx[t], b=idx[t+1], c=idx[t+2];
+      neighbors[a].add(b); neighbors[a].add(c);
+      neighbors[b].add(a); neighbors[b].add(c);
+      neighbors[c].add(a); neighbors[c].add(b);
+    }
+
+    if (overlayOn) buildAndApplyTexture().catch(err=> log('⚠️ texture rebuild failed:', err?.message||err));
+  }
+
+  function updateVertexColor(k, y){
+    if (y<minY) minY=y;
+    if (y>maxY) maxY=y;
+    const t = (maxY===minY) ? 0.5 : (y - minY) / (maxY - minY);
+    const i3 = k*3;
+    let r,g,b;
+    if (t < 0.25) { r=0.1; g=0.2+t; b=0.6 + t*0.6; }
+    else if (t < 0.5) { r=0.1 + (t-0.25)*1.2; g=0.8; b=0.2; }
+    else if (t < 0.8) { r=0.5 + (t-0.5)*1.0; g=0.35 + (t-0.5)*0.4; b=0.2; }
+    else { r=1; g=1; b=1; }
+    colorAttr.array[i3+0]=r; colorAttr.array[i3+1]=g; colorAttr.array[i3+2]=b;
+  }
+
+  function nearestAnchorFill(){
+    const N = pts.length;
+    const nearest = new Int32Array(N).fill(-1);
+    const q = new Int32Array(N); let qh=0, qt=0;
+    for (let i=0;i<N;i++){ if (isFinal[i]){ nearest[i]=i; q[qt++]=i; } }
+    if (qt===0) return;
+    while (qh<qt){
+      const i=q[qh++], src=nearest[i];
+      for (const nb of neighbors[i]){
+        const j = nb|0;
+        if (nearest[j]!==-1) continue;
+        nearest[j]=src; q[qt++]=j;
+      }
+    }
+    let any=false;
+    for (let i=0;i<N;i++){
+      if (isFinal[i]) continue;
+      const src = nearest[i]; if (src<0) continue;
+      const z = elevs[src];
+      if (Number.isFinite(z)){
+        elevs[i] = z;
+        posAttr.array[i*3+1] = z;
+        updateVertexColor(i, z);
+        any=true;
+      }
+    }
+    if (any){ posAttr.needsUpdate = true; colorAttr.needsUpdate = true; }
+  }
+
+  function smoothUnknowns(iterations=1){
+    for (let it=0; it<iterations; it++){
+      for (let i=0; i<pts.length; i++){
+        if (isFinal[i]) continue;
+        let sum=0, cnt=0;
+        for (const nb of neighbors[i]){
+          const v = elevs[nb];
+          if (Number.isFinite(v)){ sum+=v; cnt++; }
+        }
+        if (cnt>=2){
+          const v = sum/cnt;
+          elevs[i] = v;
+          posAttr.array[i*3+1] = v;
+          updateVertexColor(i, v);
+        }
+      }
+    }
+    posAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
+  }
+
+  // ---------- Radial progressive schedule (center → outward rings) ----------
+  const MAX_LEVELS = 24;
+  function spacingAtRho(rho, s0, s1, gamma){
+    rho = Math.min(1, Math.max(0, rho));
+    return s0 + (s1 - s0) * Math.pow(rho, gamma);
+  }
+  function buildRadialLevels(corePoints, R){
+    const s0 = Math.max(0.5, parseFloat(spacingCenterEl.value||'1'));
+    const s1 = Math.max(s0+0.5, parseFloat(spacingEdgeEl.value||'100'));
+    const gamma = Math.max(0.3, parseFloat(falloffExpEl.value||'1.5'));
+    function sAt(r){ return spacingAtRho(Math.min(1, r/R), s0, s1, gamma); }
+
+    const edges = [0];
+    let r = 0;
+    while (r < R){
+      const step = Math.max(0.75*sAt(r), 0.5);
+      r += step;
+      edges.push(Math.min(r, R));
+      if (edges.length > 256) break;
+    }
+
+    let ringEdges = edges;
+    if (edges.length-1 > MAX_LEVELS){
+      ringEdges = [0];
+      for (let i=1; i<MAX_LEVELS; i++){
+        const t = i/(MAX_LEVELS);
+        ringEdges.push(edges[Math.floor(t*(edges.length-1))]);
+      }
+      ringEdges.push(R);
+    }
+
+    const levels = Array.from({length:ringEdges.length-1}, ()=>[]);
+    for (let k=0;k<corePoints.length;k++){
+      const r = corePoints[k].r;
+      let li = ringEdges.findIndex(edge => r <= edge);
+      if (li === -1) li = ringEdges.length-1;
+      else if (li>0) li = li-1;
+      levels[li].push(k);
+    }
+    for (let li=0; li<levels.length; li++){
+      levels[li].sort((A,B)=>{
+        const a = Math.atan2(corePoints[A].y, corePoints[A].x);
+        const b = Math.atan2(corePoints[B].y, corePoints[B].x);
+        return a-b;
+      });
+    }
+    return levels;
+  }
+
+  // ---------- Batching for progressive requests ----------
+  const DM_BUDGET_BYTES = 2800;
+  const MAX_LOCS_HARD   = 800;
+  function byteLen(obj){ return new TextEncoder().encode(JSON.stringify(obj)).length; }
+  function indicesToBatchesLatLng(dataset, indices, toLatLng){
+    const batches = [];
+    let cur = [], curBytes = 0;
+    for (const idx of indices){
+      const loc = toLatLng(idx);
+      const candidate = { type:'elev.query', dataset, locations: cur.concat([loc]) };
+      const blen = byteLen(candidate);
+      if (blen<=DM_BUDGET_BYTES && candidate.locations.length<=MAX_LOCS_HARD){
+        cur.push(loc); curBytes=blen;
+      } else {
+        if (cur.length) batches.push({ locations: cur.slice(), bytes: curBytes });
+        cur = [loc]; curBytes = byteLen({ type:'elev.query', dataset, locations: cur });
+      }
+    }
+    if (cur.length) batches.push({ locations: cur.slice(), bytes: curBytes });
+    return batches;
+  }
+  function indicesToBatchesGeohash(dataset, indices, toGeohash, meta){
+    const batches = [];
+    let cur = [], curBytes = 0;
+    for (const idx of indices){
+      const gh = toGeohash(idx);
+      const candidate = { type:'elev.query', dataset, geohashes: cur.concat([gh]), ...meta };
+      const blen = byteLen(candidate);
+      if (blen<=DM_BUDGET_BYTES && candidate.geohashes.length<=MAX_LOCS_HARD){
+        cur.push(gh); curBytes=blen;
+      } else {
+        if (cur.length) batches.push({ geohashes: cur.slice(), bytes: curBytes, meta });
+        cur = [gh]; curBytes = byteLen({ type:'elev.query', dataset, geohashes: cur, ...meta });
+      }
+    }
+    if (cur.length) batches.push({ geohashes: cur.slice(), bytes: curBytes, meta });
+    return batches;
+  }
+
+  // ---------- Texture overlay (tile cutout → UV-aligned map) ----------
+  async function buildAndApplyTexture(){
+    if (!mesh || !geom || !hexLayer || !lastHex) { log('ℹ️ texture: need hex + mesh first'); return; }
+    const latlngs = (hexLayer.getLatLngs()[0] || []).map(ll=>({lat:ll.lat, lng:ll.lng}));
+    if (latlngs.length !== 6){ log('⚠️ hex latlngs not found'); return; }
+
+    const centerLat = lastHex.center.lat;
+    const targetMpp = Math.max(0.5, parseFloat(spacingCenterEl.value||'1'));
+    const MAX_DIM = 3072;
+    const z = pickZoomForTarget(centerLat, targetMpp, MAX_DIM, latlngs);
+    currentZoom = z;
+
+    let minx=Infinity,maxx=-Infinity,miny=Infinity,maxy=-Infinity;
+    const hexPx = latlngs.map(ll=>{
+      const x = lon2x(ll.lng, z), y = lat2y(ll.lat, z);
+      if (x<minx) minx=x; if (x>maxx) maxx=x;
+      if (y<miny) miny=y; if (y>maxy) maxy=y;
+      return {x,y};
+    });
+    const W = Math.min(MAX_DIM, Math.ceil(maxx-minx));
+    const H = Math.min(MAX_DIM, Math.ceil(maxy-miny));
+    if (W<=2 || H<=2) { log('⚠️ texture bbox too small'); return; }
+
+    const x0 = Math.floor(minx / TILE), x1 = Math.floor((maxx-1) / TILE);
+    const y0 = Math.floor(miny / TILE), y1 = Math.floor((maxy-1) / TILE);
+    const sub = 'a';
+    const tpl = tileTemplateEl.value.trim();
+    const toURL = (x,y)=> tpl
+      .replace('{s}', sub)
+      .replace('{x}', String(x))
+      .replace('{y}', String(y))
+      .replace('{z}', String(z));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+
+    ctx.save();
+    ctx.beginPath();
+    for (let i=0;i<hexPx.length;i++){
+      const p = hexPx[i];
+      const lx = Math.round(p.x - minx), ly = Math.round(p.y - miny);
+      if (i===0) ctx.moveTo(lx, ly); else ctx.lineTo(lx, ly);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    const promises = [];
+    for (let ty=y0; ty<=y1; ty++){
+      for (let tx=x0; tx<=x1; tx++){
+        const url = toURL(tx,ty);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const p = new Promise((resolve)=>{
+          img.onload = ()=>{
+            const dx = tx*TILE - minx;
+            const dy = ty*TILE - miny;
+            ctx.drawImage(img, Math.round(dx), Math.round(dy), TILE, TILE);
+            resolve();
+          };
+          img.onerror = ()=>{ resolve(); };
+        });
+        img.src = url;
+        promises.push(p);
+      }
+    }
+    await Promise.all(promises);
+    ctx.restore();
+
+    const uv = new Float32Array(pts.length*2);
+    for (let k=0;k<pts.length;k++){
+      const px = lon2x(pts[k].lng, z);
+      const py = lat2y(pts[k].lat, z);
+      const u = (px - minx) / W;
+      const v = 1 - (py - miny) / H;
+      uv[k*2+0] = u;
+      uv[k*2+1] = v;
+    }
+    geom.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy?.() || 4);
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = true;
+    tex.needsUpdate = true;
+
+    if (mesh && mesh.material){
+      mesh.material.map = tex;
+      mesh.material.vertexColors = false;
+      mesh.material.needsUpdate = true;
+      currentTexture = tex;
+      texInfoEl.textContent = `Texture: z${z} • ${W}×${H}px • mpp≈${groundResMpp(centerLat,z).toFixed(2)} • tiles ${(x1-x0+1)}×${(y1-y0+1)}`;
+      log('🖼️ texture applied', { z, size:`${W}x${H}`, tiles:`${(x1-x0+1)}x${(y1-y0+1)}` });
+    }
+  }
+
+  function removeTexture(){
+    if (mesh && mesh.material){
+      mesh.material.map = null;
+      mesh.material.vertexColors = true;
+      mesh.material.needsUpdate = true;
+      texInfoEl.textContent = '';
+    }
+    if (currentTexture){ currentTexture.dispose?.(); currentTexture=null; }
+  }
+
+  // ---------- Wire up main ----------
+  let mc;
+  let lastGenerated = null;
+
+  async function main(){
+    initMap();
+    useMyLocation();
+    requireSDK();
+    initThree();
+
+    drawBtn.addEventListener('click', startDrawHexagon);
+
+    map.on(L.Draw.Event.CREATED, (e)=>{
+      const layer = e.layer;
+      if (hexLayer) map.removeLayer(hexLayer);
+      hexLayer = layer.addTo(map);
+
+      const center = layer._hexCenter || layer.getBounds().getCenter();
+      const apothemM = layer._apothemM || (function(){
+        const latlngs = layer.getLatLngs()[0] || [];
+        if (!latlngs.length) return 100;
+        const Rm = map.distance(center, latlngs[0]);
+        return Rm * Math.sqrt(3)/2;
+      })();
+
+      lastHex = { center: { lat: center.lat, lng: center.lng }, apothemM };
+      log(`⬢ Hex finalized. Center=(${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}), apothem ≈ ${apothemM.toFixed(1)} m`);
+      generateHexGrid(lastHex);
+    });
+
+    regenBtn.addEventListener('click', ()=>{ if (lastHex) { generateHexGrid(lastHex); if (overlayOn) buildAndApplyTexture(); } else log('ℹ️ draw a hexagon first'); });
+    locBtn.addEventListener('click', useMyLocation);
+
+    // Texture toggle
+    textureToggleBtn.addEventListener('click', async ()=>{
+      overlayOn = !overlayOn;
+      textureToggleBtn.textContent = overlayOn ? '🖼️ Overlay map texture: On' : '🖼️ Overlay map texture: Off';
+      if (!mesh){ return; }
+      if (overlayOn){
+        try { await buildAndApplyTexture(); }
+        catch(e){ log('❌ texture build error:', e?.message||e); overlayOn=false; textureToggleBtn.textContent='🖼️ Overlay map texture: Off'; }
+      } else { removeTexture(); }
+    });
+
+    mc = new nkn.MultiClient({ numSubClients: 4, originalClient: false });
+    myAddrEl.textContent = '…';
+    setConn('connecting…', false);
+
+    mc.onConnect(()=>{
+      myAddrEl.textContent = mc.addr;
+      setConn('connected', true);
+      log('✅ NKN connected as', mc.addr);
+    });
+    mc.onMessage(({ src, payload }) => handleIncoming(src, payload));
+
+    pointsBox.addEventListener('input', ()=>{ countPointsBox(); });
+    document.addEventListener('keydown', (e)=>{ if (e.key==='Enter' && (e.metaKey||e.ctrlKey)) queryBtn.click(); });
+
+    queryBtn.addEventListener('click', async ()=>{
+      const dest = (relayEl.value || '').trim();
+      const dataset = (datasetEl.value || 'mapzen').trim();
+      const zEx = parseFloat(zScaleEl.value || '1.0');
+      if (!dest) return log('⚠️ enter relay address');
+      if (!lastHex || !lastGenerated) return log('⚠️ draw a hex & regenerate first');
+
+      const core = lastGenerated.core;
+      const boundary = lastGenerated.boundary;
+      const { a, R } = lastGenerated;
+
+      // maps for replies — only core points are requested
+      idxByLL = new Map();
+      for (let k=0;k<core.length;k++){
+        idxByLL.set(`${core[k].lat.toFixed(6)},${core[k].lng.toFixed(6)}`, k);
+      }
+
+      // Build sealed mesh (core+boundary; aux filled by smoothing)
+      buildHexMesh(core, boundary, a);
+
+      // Progressive radial schedule (center → edges)
+      const levels = buildRadialLevels(core, R);
+      levelInfoEl.textContent = `Rings: ${levels.length} (center→edge)`;
+
+      const sCenter = Math.max(0.5, parseFloat(spacingCenterEl.value||'1'));
+      const ghPrec  = pickGeohashPrecision(sCenter);
+      const toLatLng   = (k)=> ({ lat: core[k].lat, lng: core[k].lng });
+      const toGeohash  = (k)=> geohashEncode(core[k].lat, core[k].lng, ghPrec);
+
+      idxByGH = null;
+      if (SEND_MODE==='geohash'){
+        idxByGH = new Map();
+        for (let k=0;k<core.length;k++) idxByGH.set(geohashEncode(core[k].lat, core[k].lng, ghPrec), k);
+        log(`🧭 geohash mode: precision ${ghPrec} (center spacing≈${sCenter}m)`);
+      }
+
+      function applyResults(results, isGH){
+        let any=false;
+        for (const r of results){
+          let k = undefined;
+          if (isGH && r.geohash && idxByGH)          k = idxByGH.get(r.geohash);
+          else if (r.location){
+            const key = `${(+r.location.lat).toFixed(6)},${(+r.location.lng).toFixed(6)}`;
+            k = idxByLL.get(key);
+          }
+          if (k===undefined) continue;
+          const y = (((r.elevation ?? 0)*1.0) * zEx); // NEGATED elevation sign
+          elevs[k] = y;
+          isFinal[k] = true;
+          posAttr.array[k*3+1] = y;
+          updateVertexColor(k, y);
+          any=true;
+        }
+        if (any){ posAttr.needsUpdate = true; colorAttr.needsUpdate = true; }
+      }
+
+      let ringNo=0, totalFetched=0, totalPts=core.length;
+      for (const ring of levels){
+        ringNo++;
+        let batches, modeLabel;
+        if (SEND_MODE==='geohash'){
+          const meta = { enc:'geohash', prec: ghPrec };
+          batches = indicesToBatchesGeohash(dataset, ring, toGeohash, meta);
+          modeLabel = `geohash@${ghPrec}`;
+        } else {
+          batches = indicesToBatchesLatLng(dataset, ring, toLatLng);
+          modeLabel = 'lat/lng';
+        }
+
+        progressEl.textContent = `Ring ${ringNo}/${levels.length} — ${batches.length} batches (${modeLabel})`;
+        let bi=0;
+
+        for (const b of batches){
+          bi++;
+          const env = (SEND_MODE==='geohash')
+            ? { type:'elev.query', dataset, geohashes: b.geohashes, ...b.meta }
+            : { type:'elev.query', dataset, locations: b.locations };
+
+          const t0 = performance.now();
+          const resp = await sendWithReply(mc, dest, env, 60000)
+            .catch(e=>{ log('❌ batch send error:', e?.message||e); return null; });
+          const dt = Math.round(performance.now()-t0);
+          if (!resp){ log(`❌ ring ${ringNo} batch ${bi} failed`); continue; }
+
+          let json=null;
+          if (resp.body_b64) { try { json = JSON.parse(atob(resp.body_b64)); } catch(e){ log(`❓ ring ${ringNo} batch ${bi} bad JSON`, e); continue; } }
+          else if (resp.body) { json = (typeof resp.body === 'string') ? JSON.parse(resp.body) : resp.body; }
+          if (!json || !Array.isArray(json.results)) { log(`❓ ring ${ringNo} batch ${bi} unexpected`, json); continue; }
+
+          applyResults(json.results, SEND_MODE==='geohash');
+          totalFetched += json.results.length;
+
+          nearestAnchorFill();   // hole-free preview
+          smoothUnknowns(2);     // gentle blending
+
+          progressEl.textContent = `Ring ${ringNo}/${levels.length} — batch ${bi}/${batches.length} (${totalFetched}/${totalPts}) — ${dt} ms`;
+          log(`🧩 ring ${ringNo} batch ${bi}/${batches.length} applied (${json.results.length} pts)`);
+          geom.computeVertexNormals();
+        }
+      }
+
+      progressEl.textContent = `Done. Samples: ${isFinal.filter(Boolean).length}/${core.length}`;
+      geom.computeVertexNormals();
+      log('✅ radial progressive refine complete');
+
+      if (overlayOn) buildAndApplyTexture();
+    });
+  }
+
+  // ---------- Boot ----------
+  window.addEventListener('load', () => {
+    try { main(); } 
+    catch (e) { log('❌ init error:', e.message || e); }
+  });
+
+  // Keep globals for last hex + last generation
+
+})();
+</script>
+</body>
+</html>
