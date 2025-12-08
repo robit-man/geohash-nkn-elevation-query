@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>NKN Tritree Globe — Earth-Scale & Efficient</title>
+  <title>NKN Tritree Globe · Orbit + Wayback Imagery</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- NKN SDK UMD (global `nkn`) with fallback -->
@@ -22,7 +22,7 @@
   <style>
     :root {
       --bg: #020617;
-      --panel: #020617cc;
+      --panel: #020617d9;
       --panel-solid: #020617f2;
       --accent: #22d3ee;
       --accent-soft: #38bdf8;
@@ -33,6 +33,7 @@
       --bad: #f97373;
       --border: #1f2937;
       --border-strong: #111827;
+      --chip-bg: #02061799;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -43,7 +44,7 @@
       overflow:hidden;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
         "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top, #0f172a 0, #020617 55%);
+      background: radial-gradient(circle at top, #020617 0, #020617 55%);
       color: var(--text);
     }
     #app {
@@ -53,7 +54,7 @@
       flex-direction:column;
     }
 
-    /* Top toolbar (minimal: just title + hint) */
+    /* Top toolbar */
     #toolbar {
       padding:10px 14px;
       display:flex;
@@ -62,9 +63,10 @@
       gap:10px;
       pointer-events:auto;
       background:linear-gradient(to bottom,
-        rgba(15,23,42,0.95),
-        rgba(15,23,42,0.75),
+        rgba(15,23,42,0.96),
+        rgba(15,23,42,0.78),
         rgba(15,23,42,0));
+      border-bottom:1px solid #0f172a;
       z-index:10;
     }
     #toolbar-left {
@@ -75,18 +77,24 @@
     #title {
       font-size:14px;
       font-weight:600;
+      letter-spacing:0.06em;
+      text-transform:uppercase;
+    }
+    #subtitle {
+      font-size:11px;
+      color:var(--muted);
       letter-spacing:0.02em;
-      white-space:nowrap;
     }
     #hint {
-      font-size:12px;
+      font-size:11px;
       color:var(--muted);
+      margin-top:2px;
     }
     .pill {
       padding:4px 8px;
       border-radius:999px;
       border:1px solid var(--border);
-      background:#02061799;
+      background:var(--chip-bg);
       font-size:11px;
       display:inline-flex;
       align-items:center;
@@ -110,7 +118,7 @@
       display:block;
     }
 
-    /* Debug UI (bottom-left bug) */
+    /* Debug bug bottom-left */
     #debug-toggle{
       position:absolute;
       left:10px;
@@ -159,6 +167,8 @@
       font-size:11px;
       font-weight:600;
       color:var(--accent-soft);
+      letter-spacing:0.06em;
+      text-transform:uppercase;
     }
     #debug-panel .fps{
       margin-bottom:4px;
@@ -198,7 +208,7 @@
       transform-origin:left center;
     }
 
-    /* Sidebar toggle (right edge) */
+    /* Sidebar toggle (right Edge) */
     #sidebar-toggle {
       position:absolute;
       top:50%;
@@ -230,17 +240,17 @@
       top:0;
       right:0;
       bottom:0;
-      width:280px;
-      max-width:80%;
+      width:300px;
+      max-width:82%;
       background:var(--panel-solid);
       border-left:1px solid var(--border-strong);
-      box-shadow:-12px 0 30px rgba(0,0,0,0.75);
+      box-shadow:-18px 0 40px rgba(0,0,0,0.85);
       transform:translateX(100%);
       transition:transform 0.22s cubic-bezier(0.24, 0.8, 0.3, 1);
       z-index:24;
       display:flex;
       flex-direction:column;
-      backdrop-filter:blur(14px);
+      backdrop-filter:blur(16px);
     }
     #sidebar.open {
       transform:translateX(0);
@@ -249,13 +259,13 @@
       display:flex;
       align-items:center;
       justify-content:space-between;
-      padding:10px 10px 8px 12px;
+      padding:10px 12px 8px 14px;
       border-bottom:1px solid var(--border);
     }
     #sidebar-title {
       font-size:12px;
       font-weight:600;
-      letter-spacing:0.04em;
+      letter-spacing:0.12em;
       text-transform:uppercase;
       color:var(--muted);
     }
@@ -271,7 +281,7 @@
     }
     #sidebar-tabs {
       display:flex;
-      padding:6px 6px;
+      padding:6px 8px;
       gap:4px;
       border-bottom:1px solid var(--border);
     }
@@ -295,7 +305,7 @@
     #sidebar-pages {
       flex:1;
       overflow:auto;
-      padding:8px 10px 10px 10px;
+      padding:8px 11px 10px 11px;
       font-size:11px;
     }
     .sidebar-page {
@@ -307,13 +317,13 @@
 
     .sidebar-section {
       margin-bottom:10px;
-      padding-bottom:8px;
-      border-bottom:1px solid var(--border);
+      padding:7px 8px 9px 8px;
+      border-radius:10px;
+      background:radial-gradient(circle at top left, #0b112022, transparent 55%);
+      border:1px solid #0b1120;
     }
-    .sidebar-section:last-child {
-      border-bottom:none;
-      margin-bottom:0;
-      padding-bottom:0;
+    .sidebar-section + .sidebar-section {
+      margin-top:6px;
     }
     .sidebar-section-title {
       font-size:11px;
@@ -321,7 +331,12 @@
       color:var(--accent-soft);
       margin-bottom:4px;
       text-transform:uppercase;
-      letter-spacing:0.04em;
+      letter-spacing:0.06em;
+    }
+    .sidebar-section-subtitle {
+      font-size:10px;
+      color:var(--muted);
+      margin-bottom:4px;
     }
 
     .field-group {
@@ -361,12 +376,14 @@
     .field-note {
       font-size:10px;
       color:var(--muted);
+      margin-top:2px;
     }
 
     .metric-list {
       display:flex;
       flex-direction:column;
       gap:2px;
+      margin-top:2px;
     }
     .metric-row {
       display:flex;
@@ -420,18 +437,70 @@
       background:#0b1120;
     }
 
+    #myAddr {
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px dashed var(--border);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    #imageryPreview {
+      width:100%;
+      max-width:220px;
+      border-radius:10px;
+      border:1px solid #111827;
+      background:#000;
+      image-rendering:pixelated;
+      display:block;
+    }
+    #imageryUrl {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size:10px;
+      color:#9ca3af;
+      word-break:break-all;
+      margin-top:4px;
+    }
+    .btn-inline {
+      padding:3px 7px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#020617dd;
+      color:var(--muted);
+      font-size:10px;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .btn-inline.primary {
+      border-color:var(--accent-soft);
+      color:var(--accent-soft);
+    }
+    .chip-toggle {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-top:4px;
+      font-size:10px;
+      color:var(--muted);
+    }
+    .chip-toggle input {
+      accent-color:var(--accent-soft);
+    }
   </style>
 </head>
 <body>
 <div id="app">
   <div id="toolbar">
     <div id="toolbar-left">
-      <div id="title">NKN Tritree Globe · Earth-Scale & Efficient</div>
+      <div id="title">NKN Tritree Globe</div>
+      <div id="subtitle">Orbit · Elevation via NKN · Esri Wayback imagery mapped to spherical tritree tiles</div>
       <div id="hint">
         <span class="pill">
-          <span class="key">Drag</span> orbit / look
+          <span class="key">Drag</span> orbit
           <span class="key">Wheel</span> zoom
-          <span class="key">Shift + Click</span> drop to surface & walk
+          <span class="key">Shift + Click</span> focus hex patch
         </span>
       </div>
     </div>
@@ -442,19 +511,19 @@
     <button id="sidebar-toggle" title="Toggle configuration">⚙️</button>
     <div id="sidebar">
       <div id="sidebar-header">
-        <div id="sidebar-title">Config & Metrics</div>
+        <div id="sidebar-title">Config · Metrics</div>
         <button id="sidebar-close" aria-label="Close sidebar">×</button>
       </div>
       <div id="sidebar-tabs">
         <button class="sidebar-tab active" data-tab="overview">Overview</button>
         <button class="sidebar-tab" data-tab="elevation">Elevation / NKN</button>
-        <button class="sidebar-tab" data-tab="lod">LOD & Camera</button>
+        <button class="sidebar-tab" data-tab="imagery">Imagery &amp; LOD</button>
       </div>
       <div id="sidebar-pages">
         <!-- Overview -->
         <div class="sidebar-page active" data-page="overview">
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Status</div>
+            <div class="sidebar-section-title">Session</div>
             <div class="field-group">
               <label>nkn-sdk</label>
               <div id="sdkStatus">Loading nkn-sdk…</div>
@@ -465,17 +534,15 @@
             </div>
             <div class="field-group">
               <label>My NKN address</label>
-              <div id="myAddr" style="font-size:11px;padding:4px 8px;border-radius:999px;border:1px dashed var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                —
-              </div>
+              <div id="myAddr">—</div>
             </div>
           </div>
 
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Globe & LOD</div>
+            <div class="sidebar-section-title">Globe</div>
             <div class="metric-list">
               <div class="metric-row">
-                <span class="metric-label">Tiles</span>
+                <span class="metric-label">Visible tiles</span>
                 <span class="metric-value" id="metric-tiles">–</span>
               </div>
               <div class="metric-row">
@@ -487,7 +554,7 @@
                 <span class="metric-value" id="metric-hex">none</span>
               </div>
               <div class="metric-row">
-                <span class="metric-label">Lat / Lon</span>
+                <span class="metric-label">Lat / Lon (center)</span>
                 <span class="metric-value" id="metric-latlon">–</span>
               </div>
             </div>
@@ -539,22 +606,22 @@
         <!-- Elevation / NKN -->
         <div class="sidebar-page" data-page="elevation">
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Forwarder & dataset</div>
+            <div class="sidebar-section-title">NKN forwarder</div>
+            <div class="sidebar-section-subtitle">
+              Forwarder that proxies elevation queries to your dataset.
+            </div>
             <div class="field-group">
               <label for="relay">Forwarder address</label>
               <input id="relay" type="text" placeholder="forwarder.… or pubkey" />
             </div>
             <div class="field-group">
-              <label for="dataset">Dataset</label>
+              <label for="dataset">Dataset key</label>
               <input id="dataset" type="text" value="mapzen" />
-            </div>
-            <div class="field-note">
-              Provide your NKN forwarder endpoint and elevation dataset key.
             </div>
           </div>
 
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Fetch tuning</div>
+            <div class="sidebar-section-title">Elevation fetch tuning</div>
             <div class="field-group">
               <label>Batch size (points)</label>
               <div class="field-row-inline">
@@ -584,19 +651,54 @@
               </div>
             </div>
             <div class="field-note">
-              Fetching prioritizes vertices inside the camera FOV, then fills nearby off-screen vertices
-              so you get a fast coarse pass and then refining passes as you zoom.
+              Batches prioritize vertices inside the camera FOV, then fill nearby off-screen
+              vertices for a quick coarse pass and refinement as you linger or zoom.
             </div>
           </div>
         </div>
 
-        <!-- LOD & Camera -->
-        <div class="sidebar-page" data-page="lod">
+        <!-- Imagery & LOD -->
+        <div class="sidebar-page" data-page="imagery">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Esri Wayback imagery</div>
+            <div class="sidebar-section-subtitle">
+              Imagery tiles are fetched per tritree tile, using WebMercator z/x/y like in your
+              minimap → WMTS setup.
+            </div>
+            <div class="chip-toggle">
+              <input id="cfg-imageryEnabled" type="checkbox" checked />
+              <label for="cfg-imageryEnabled">Enable imagery on globe</label>
+            </div>
+            <div class="field-group" style="margin-top:5px;">
+              <label for="cfg-imageryVersion">Wayback version ID</label>
+              <input id="cfg-imageryVersion" type="text" value="49849" />
+            </div>
+            <div class="field-group">
+              <label for="cfg-imageryZoom">Imagery zoom (TileMatrix)</label>
+              <div class="field-row-inline">
+                <span>z (0–18)</span>
+                <input id="cfg-imageryZoom" type="number" min="0" max="18" step="1" value="6" />
+              </div>
+            </div>
+
+            <div class="field-row-inline" style="margin-top:4px;">
+              <button id="btnImageryPreview" class="btn-inline primary">
+                Preview tile under center
+              </button>
+              <span style="font-size:10px;color:var(--muted);">Uses center lat/lon + z → x/y</span>
+            </div>
+
+            <div style="margin-top:6px;">
+              <img id="imageryPreview" alt="WMTS tile preview" />
+              <div id="imageryUrl"></div>
+            </div>
+          </div>
+
           <div class="sidebar-section">
             <div class="sidebar-section-title">LOD mode</div>
             <div>
-              <button id="btnLodOrbit" class="mode-btn-small active">Orbit LOD</button>
-              <button id="btnLodZoom" class="mode-btn-small">Zoom focus LOD</button>
+              <button id="btnLodOrbit" class="mode-btn-small active">Orbit falloff</button>
+              <button id="btnLodZoom" class="mode-btn-small">Zoom focus</button>
             </div>
             <div class="pill-small">
               <span class="key">Orbit</span> falloff from camera-facing point
@@ -629,21 +731,8 @@
               </div>
             </div>
             <div class="field-note">
-              Higher budgets refine faster but may cost FPS. Tile budget caps total active
-              triangle patches on the globe.
-            </div>
-          </div>
-
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Camera mode</div>
-            <div>
-              <button id="btnCamOrbit" class="mode-btn-small active">Orbit</button>
-              <button id="btnCamSurface" class="mode-btn-small">Surface</button>
-            </div>
-            <div class="field-note">
-              Orbit mode uses drag-to-orbit and auto-tilt as you zoom.
-              Surface mode puts you 1.6 m above the terrain on a raycast anchor, with drag-to-look
-              relative to the local horizon and W/A/S/D walking along the surface.
+              Higher budgets refine faster but cost more CPU/GPU. Tile budget caps total
+              active spherical triangle patches.
             </div>
           </div>
         </div>
@@ -668,17 +757,14 @@
   // Constants & helpers (Earth scale, meters)
   // ──────────────────────────────────────────────────────────────
 
-  const EARTH_RADIUS_M = 6_371_000; // mean Earth radius, meters
+  const EARTH_RADIUS_M = 6_371_000;
   const PLANET_RADIUS = EARTH_RADIUS_M;
 
-  const CAMERA_NEAR_ORBIT = 100;   // 100 m
-  const CAMERA_NEAR_SURFACE = 0.1; // 10 cm
+  const CAMERA_NEAR = 100;
+  const CAMERA_FAR  = PLANET_RADIUS * 5;
 
-  const SURFACE_EYE_HEIGHT = 1.6; // meters above terrain
-
-  const ALT_30K_UNITS = 30_000;   // ~30k ft
-  const ALT_10K_UNITS = 10_000;   // ~10k ft
-  const ALT_AUTO_SURFACE_UNITS = 8_000; // auto switch when closer than this
+  const ALT_30K_UNITS = 30_000;
+  const ALT_10K_UNITS = 10_000;
 
   const ELEVATION_EXAGGERATION = 10.0;
   const MAX_TILE_LEVEL = 5;
@@ -688,6 +774,9 @@
 
   const DEFAULT_FORWARDER =
     'forwarder.5d7bdb47e1c757508d28f5726469afa1f7c93bd037a1940aa0dab97ab421c833';
+
+  const WMTS_ROOT =
+    'https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer';
 
   const tilesPendingNormals = new Set();
   let viewportHeight = window.innerHeight || 800;
@@ -722,6 +811,17 @@
     if (t < 0) t = -b + Math.sqrt(disc);
     if (t < 0) return null;
     return o.add(d.multiplyScalar(t));
+  }
+
+  // WebMercator tile math (extended) inspired by your minimap → WMTS sample :contentReference[oaicite:2]{index=2}
+  function lonLatToTileCoords(lonDeg, latDeg, z) {
+    const latRad = latDeg * Math.PI / 180;
+    const n = Math.pow(2, z);
+    const cx = (lonDeg + 180) / 360 * n;
+    const cy = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
+    const x = Math.floor(cx);
+    const y = Math.floor(cy);
+    return { x, y, cx, cy, n };
   }
 
   // ──────────────────────────────────────────────────────────────
@@ -868,7 +968,7 @@
       this.relayDest = '';
       this.dataset = 'mapzen';
 
-      this.vertexMap = new Map(); // key -> record
+      this.vertexMap = new Map();
       this.cameraPos = new THREE.Vector3();
       this.cameraDir = new THREE.Vector3(0, 0, -1);
       this.cameraFovRad = 45 * DEG2RAD;
@@ -881,7 +981,7 @@
 
       this.maxKBPerMinute = 512; // 0 = unlimited
       this.windowMs = 60_000;
-      this.sendEvents = []; // {t, bytes}
+      this.sendEvents = [];
 
       this.stats = {
         requestCount: 0,
@@ -966,7 +1066,6 @@
       }
       rec.clients.push({ tile, index });
 
-      // Cache hit: already have height, apply immediately
       if (rec.status === 'done') {
         tile.updateVertex(index, rec.height);
       }
@@ -1047,7 +1146,7 @@
         let bytesIn = 0;
         try {
           if (resp.body_b64) {
-            bytesIn = resp.body_b64.length * 0.75; // approx
+            bytesIn = resp.body_b64.length * 0.75;
             const decoded = atob(resp.body_b64);
             json = JSON.parse(decoded);
           } else if (resp.body) {
@@ -1109,11 +1208,80 @@
   }
 
   // ──────────────────────────────────────────────────────────────
+  // Imagery manager (Esri Wayback WMTS)
+  // ──────────────────────────────────────────────────────────────
+
+  class ImageryManager {
+    constructor() {
+      this.enabled = true;
+      this.versionId = '49849';
+      this.zoom = 6;
+
+      this.loader = new THREE.TextureLoader();
+      this.loader.crossOrigin = 'anonymous';
+      this.cache = new Map(); // key: version|z|x|y -> {texture, promise}
+    }
+
+    setConfig({ enabled, versionId, zoom }) {
+      if (typeof enabled === 'boolean') this.enabled = enabled;
+      if (versionId) this.versionId = String(versionId).trim();
+      if (Number.isFinite(zoom)) {
+        this.zoom = Math.max(0, Math.min(18, Math.floor(zoom)));
+      }
+    }
+
+    getConfig() {
+      return {
+        enabled: this.enabled,
+        versionId: this.versionId,
+        zoom: this.zoom
+      };
+    }
+
+    buildUrl(versionId, z, x, y) {
+      return `${WMTS_ROOT}/tile/${versionId}/${z}/${y}/${x}`;
+    }
+
+    getTile(x, y, z) {
+      const versionId = this.versionId;
+      const key = `${versionId}|${z}|${x}|${y}`;
+      const cached = this.cache.get(key);
+      if (cached) {
+        if (cached.texture) return Promise.resolve(cached.texture);
+        if (cached.promise) return cached.promise;
+      }
+
+      const url = this.buildUrl(versionId, z, x, y);
+      const promise = new Promise((resolve) => {
+        this.loader.load(
+          url,
+          tex => {
+            tex.encoding = THREE.sRGBEncoding;
+            tex.anisotropy = 4;
+            this.cache.set(key, { texture: tex });
+            resolve(tex);
+          },
+          undefined,
+          err => {
+            console.error('[imagery] failed to load', url, err);
+            this.cache.set(key, { texture: null });
+            resolve(null);
+          }
+        );
+      });
+      this.cache.set(key, { promise });
+      return promise;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────
   // Triangular tile (spherical tritree node)
   // ──────────────────────────────────────────────────────────────
 
   class TriTile {
-    constructor(v0, v1, v2, level = 0, index = 0, parent = null, radius = PLANET_RADIUS, elevationClient = null) {
+    constructor(v0, v1, v2, level = 0, index = 0, parent = null,
+                radius = PLANET_RADIUS, elevationClient = null) {
+
       this.v0 = v0.clone().normalize();
       this.v1 = v1.clone().normalize();
       this.v2 = v2.clone().normalize();
@@ -1140,6 +1308,13 @@
       const a1 = Math.acos(THREE.MathUtils.clamp(this.centerDir.dot(this.v1), -1, 1));
       const a2 = Math.acos(THREE.MathUtils.clamp(this.centerDir.dot(this.v2), -1, 1));
       this.angularRadius = Math.max(a0, a1, a2);
+
+      // imagery state
+      this.imageryVersion = null;
+      this.imageryZoom = null;
+      this.imageryTileX = null;
+      this.imageryTileY = null;
+      this.imageryReady = false;
     }
 
     subdivide() {
@@ -1243,10 +1418,11 @@
       return geom;
     }
 
-    ensureMesh(parent, material) {
+    ensureMesh(parent, baseMaterial) {
       if (!this.mesh) {
         this.buildGeometry();
-        this.mesh = new THREE.Mesh(this.geometry, material);
+        const mat = baseMaterial.clone();
+        this.mesh = new THREE.Mesh(this.geometry, mat);
         this.mesh.castShadow = false;
         this.mesh.receiveShadow = false;
         parent.add(this.mesh);
@@ -1275,6 +1451,7 @@
         t.baseDirs = null;
         t.positionAttr = null;
         t.children = null;
+        t.clearImagery();
         count++;
       }
       this.children = null;
@@ -1299,6 +1476,72 @@
 
       this.positionAttr.needsUpdate = true;
       tilesPendingNormals.add(this);
+    }
+
+    clearImagery() {
+      this.imageryVersion = null;
+      this.imageryZoom = null;
+      this.imageryTileX = null;
+      this.imageryTileY = null;
+      this.imageryReady = false;
+      if (this.mesh && this.mesh.material) {
+        this.mesh.material.map = null;
+        this.mesh.material.needsUpdate = true;
+      }
+    }
+
+    ensureImagery(imageryManager, config) {
+      if (!imageryManager || !config || !config.enabled) return;
+      if (!this.mesh || !this.baseDirs || !this.geometry) return;
+
+      const { versionId, zoom } = config;
+      if (this.imageryReady &&
+          this.imageryVersion === versionId &&
+          this.imageryZoom === zoom) {
+        return;
+      }
+
+      this.imageryVersion = versionId;
+      this.imageryZoom = zoom;
+      this.imageryReady = false;
+
+      const { latDeg: cLat, lonDeg: cLon } = dirToLatLon(this.centerDir);
+      const centerCoords = lonLatToTileCoords(cLon, cLat, zoom);
+      this.imageryTileX = centerCoords.x;
+      this.imageryTileY = centerCoords.y;
+
+      const vxCount = this.baseDirs.length / 3;
+      const uvArray = new Float32Array(vxCount * 2);
+      const tmpDir = new THREE.Vector3();
+
+      for (let i = 0; i < vxCount; i++) {
+        const bx = this.baseDirs[i*3 + 0];
+        const by = this.baseDirs[i*3 + 1];
+        const bz = this.baseDirs[i*3 + 2];
+        tmpDir.set(bx, by, bz);
+        const { latDeg, lonDeg } = dirToLatLon(tmpDir);
+        const c = lonLatToTileCoords(lonDeg, latDeg, zoom);
+        let u = c.cx - this.imageryTileX;
+        let v = c.cy - this.imageryTileY;
+        u = THREE.MathUtils.clamp(u, 0, 1);
+        v = THREE.MathUtils.clamp(v, 0, 1);
+        uvArray[i*2 + 0] = u;
+        uvArray[i*2 + 1] = 1 - v; // flip V for texture space
+      }
+
+      this.geometry.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+      this.geometry.attributes.uv.needsUpdate = true;
+
+      imageryManager.getTile(this.imageryTileX, this.imageryTileY, zoom)
+        .then(tex => {
+          if (!tex || !this.mesh || !this.mesh.material) return;
+          this.mesh.material.map = tex;
+          this.mesh.material.needsUpdate = true;
+          this.imageryReady = true;
+        })
+        .catch(err => {
+          console.error('[imagery] apply failed', err);
+        });
     }
   }
 
@@ -1343,14 +1586,15 @@
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Tritree manager (LOD + budgets + modes)
+  // Tritree manager (LOD + budgets + imagery)
   // ──────────────────────────────────────────────────────────────
 
   class TriTreeManager {
-    constructor(scene, elevationClient, radius = PLANET_RADIUS) {
+    constructor(scene, elevationClient, imageryManager, radius = PLANET_RADIUS) {
       this.scene = scene;
       this.radius = radius;
       this.elevationClient = elevationClient;
+      this.imageryManager = imageryManager;
 
       this.group = new THREE.Group();
       this.group.name = 'PlanetGroup';
@@ -1358,7 +1602,7 @@
 
       this.rootTiles = createIcosahedronTiles(radius, elevationClient);
       this.material = new THREE.MeshStandardMaterial({
-        color: 0x6b7280,
+        color: 0x4b5563,
         metalness: 0.0,
         roughness: 0.95,
         flatShading: false,
@@ -1370,7 +1614,6 @@
       this.hexPatch = null;
       this.lodMode = 'orbit';
       this.viewFocusDir = null;
-      this.isSurface = false;
 
       this.tileBudget = 2000;
       this.splitBudget = 64;
@@ -1410,9 +1653,21 @@
       }
     }
 
+    setImageryConfig(config) {
+      if (!this.imageryManager) return;
+      this.imageryManager.setConfig(config || {});
+      // Clear imagery so tiles rebind to new version / zoom
+      const stack = [...this.rootTiles];
+      while (stack.length) {
+        const t = stack.pop();
+        t.clearImagery();
+        if (t.children) stack.push(...t.children);
+      }
+    }
+
     _desiredLevelForTile(tile, camera) {
       const dist = camera.position.length();
-      const altUnits = dist - this.radius; // meters above surface
+      const altUnits = dist - this.radius;
 
       let baseLevel = 0;
 
@@ -1460,18 +1715,7 @@
         }
       }
 
-      if (this.isSurface) {
-        const camDir = camera.position.clone().normalize();
-        const dotC = THREE.MathUtils.clamp(tile.centerDir.dot(camDir), -1, 1);
-        const angleToCam = Math.acos(dotC);
-
-        if (angleToCam < 5 * DEG2RAD) {
-          baseLevel = Math.max(baseLevel, MAX_TILE_LEVEL);
-        } else if (angleToCam < 12 * DEG2RAD) {
-          baseLevel = Math.max(baseLevel, MAX_TILE_LEVEL - 1);
-        }
-      }
-
+      // Hex patch focus
       let levelFromPatch = 0;
       const patch = this.hexPatch;
       if (patch && patch.centerDir) {
@@ -1490,9 +1734,7 @@
       return desired;
     }
 
-    update(camera, isSurface = false) {
-      this.isSurface = !!isSurface;
-
+    update(camera) {
       const viewDir = new THREE.Vector3();
       camera.getWorldDirection(viewDir);
       const hit = raySphereIntersection(camera.position, viewDir);
@@ -1519,6 +1761,10 @@
           tile.ensureMesh(this.group, this.material);
           tile.setVisible(true);
           this.visibleTileCount++;
+
+          if (this.imageryManager && this.imageryManager.enabled) {
+            tile.ensureImagery(this.imageryManager, this.imageryManager.getConfig());
+          }
 
           if (tile.level < desired && tile.level < MAX_TILE_LEVEL) {
             const priority = (desired - tile.level) + 0.1 * (MAX_TILE_LEVEL - tile.level);
@@ -1561,38 +1807,18 @@
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Globals for scene / camera / modes
+  // Globals for scene / hex selection
   // ──────────────────────────────────────────────────────────────
 
   let triTree = null;
 
-  const terrainRaycaster = new THREE.Raycaster();
   const clickRaycaster = new THREE.Raycaster();
   const clickNDC = new THREE.Vector2();
 
-  let cameraMode = 'orbit';
-  let lodMode = 'orbit';
-
-  const keys = new Set();
-
-  let surfacePos = null;
-  const surfaceUp = new THREE.Vector3();
-  const surfaceForward = new THREE.Vector3();
-  const surfaceRight = new THREE.Vector3();
-  const surfaceBaseForward = new THREE.Vector3();
-  let surfaceYaw = 0;
-  let surfacePitch = 0;
-  const MAX_PITCH = 80 * DEG2RAD;
-
-  const SURFACE_WALK_SPEED = 1.4;  // m/s
-  const SURFACE_SPRINT_MULT = 3.0; // sprint factor
-
-  let isPointerDraggingSurfaceLook = false;
-  let lastPointerX = 0;
-  let lastPointerY = 0;
-
-  const orbitSavedPosition = new THREE.Vector3();
-  const orbitSavedTarget = new THREE.Vector3();
+  const hexSelection = {
+    centerDir: null,
+    radius: 5 * DEG2RAD
+  };
 
   function isEditableTarget(el) {
     if (!el) return false;
@@ -1603,19 +1829,14 @@
     return false;
   }
 
-  function getTerrainPointFromDir(dir) {
-    // Raycast from planet center outward along direction to hit the current terrain
-    if (!triTree || !triTree.group) {
-      return dir.clone().normalize().multiplyScalar(PLANET_RADIUS);
-    }
-    const origin = new THREE.Vector3(0, 0, 0);
-    const rayDir = dir.clone().normalize();
-    terrainRaycaster.set(origin, rayDir);
-    const hits = terrainRaycaster.intersectObject(triTree.group, true);
-    if (hits.length > 0) {
-      return hits[0].point.clone();
-    }
-    return dir.clone().normalize().multiplyScalar(PLANET_RADIUS);
+  function getSphereIntersectionFromEvent(e, renderer, camera) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    clickNDC.set(x, y);
+
+    clickRaycaster.setFromCamera(clickNDC, camera);
+    return raySphereIntersection(clickRaycaster.ray.origin, clickRaycaster.ray.direction);
   }
 
   // ──────────────────────────────────────────────────────────────
@@ -1647,8 +1868,6 @@
 
     const btnLodOrbit = document.getElementById('btnLodOrbit');
     const btnLodZoom = document.getElementById('btnLodZoom');
-    const btnCamOrbit = document.getElementById('btnCamOrbit');
-    const btnCamSurface = document.getElementById('btnCamSurface');
 
     const debugToggle = document.getElementById('debug-toggle');
     const debugPanel = document.getElementById('debug-panel');
@@ -1667,6 +1886,13 @@
     const cfgTileBudget = document.getElementById('cfg-tileBudget');
     const cfgSplitBudget = document.getElementById('cfg-splitBudget');
     const cfgMergeBudget = document.getElementById('cfg-mergeBudget');
+
+    const cfgImageryEnabled = document.getElementById('cfg-imageryEnabled');
+    const cfgImageryVersion = document.getElementById('cfg-imageryVersion');
+    const cfgImageryZoom = document.getElementById('cfg-imageryZoom');
+    const btnImageryPreview = document.getElementById('btnImageryPreview');
+    const imageryPreviewImg = document.getElementById('imageryPreview');
+    const imageryUrlEl = document.getElementById('imageryUrl');
 
     const LS_RELAY = 'nkn.globe.relay';
     const LS_DATASET = 'nkn.globe.dataset';
@@ -1723,7 +1949,6 @@
     renderer.toneMappingExposure = 1.1;
     renderer.physicallyCorrectLights = true;
     container.appendChild(renderer.domElement);
-
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
     const scene = new THREE.Scene();
@@ -1732,8 +1957,8 @@
     const camera = new THREE.PerspectiveCamera(
       45,
       container.clientWidth / container.clientHeight,
-      CAMERA_NEAR_ORBIT,
-      PLANET_RADIUS * 5
+      CAMERA_NEAR,
+      CAMERA_FAR
     );
     camera.position.set(0, 0, PLANET_RADIUS * 3);
     camera.lookAt(0, 0, 0);
@@ -1745,44 +1970,35 @@
     controls.maxDistance = PLANET_RADIUS * 8.0;
     controls.target.set(0, 0, 0);
 
-    orbitSavedPosition.copy(camera.position);
-    orbitSavedTarget.copy(controls.target);
-
     // Lighting rig
-    const ambient = new THREE.AmbientLight(0x404040, 0.6);
+    const ambient = new THREE.AmbientLight(0x404040, 0.65);
     scene.add(ambient);
 
-    const hemi = new THREE.HemisphereLight(0x93c5fd, 0x020617, 0.45);
+    const hemi = new THREE.HemisphereLight(0x93c5fd, 0x020617, 0.5);
     hemi.position.set(0, PLANET_RADIUS * 2, 0);
     scene.add(hemi);
 
-    const sun = new THREE.DirectionalLight(0xfff3e0, 1.4);
+    const sun = new THREE.DirectionalLight(0xfff3e0, 1.5);
     sun.position.set(PLANET_RADIUS * 3, PLANET_RADIUS * 2, PLANET_RADIUS * 1.5);
     sun.target.position.set(0, 0, 0);
+    sun.castShadow = false;
     scene.add(sun);
     scene.add(sun.target);
 
-    const fill = new THREE.DirectionalLight(0x88caff, 0.25);
+    const fill = new THREE.DirectionalLight(0x88caff, 0.3);
     fill.position.set(-PLANET_RADIUS * 2, PLANET_RADIUS * 0.5, -PLANET_RADIUS);
     scene.add(fill);
 
     const elevationClient = new ElevationClient();
-    triTree = new TriTreeManager(scene, elevationClient, PLANET_RADIUS);
+    const imageryManager = new ImageryManager();
+    triTree = new TriTreeManager(scene, elevationClient, imageryManager, PLANET_RADIUS);
 
-    // ────────────────────────────────────────────────────────
-    // Hex selector
-    // ────────────────────────────────────────────────────────
-
+    // Hex selector visualization
     const hexGeometry = new THREE.BufferGeometry();
     const hexMaterial = new THREE.LineBasicMaterial({ color: 0x22d3ee });
     const hexLine = new THREE.LineLoop(hexGeometry, hexMaterial);
     hexLine.visible = false;
     scene.add(hexLine);
-
-    const hexSelection = {
-      centerDir: null,
-      radius: 5 * DEG2RAD
-    };
 
     function updateHexVisualization() {
       const patch = hexSelection;
@@ -1799,9 +2015,7 @@
       const r = patch.radius;
 
       let up = new THREE.Vector3(0, 1, 0);
-      if (Math.abs(up.dot(c)) > 0.98) {
-        up = new THREE.Vector3(1, 0, 0);
-      }
+      if (Math.abs(up.dot(c)) > 0.98) up = new THREE.Vector3(1, 0, 0);
       const east = new THREE.Vector3().crossVectors(up, c).normalize();
       const north = new THREE.Vector3().crossVectors(c, east).normalize();
 
@@ -1844,115 +2058,8 @@
       updateHexVisualization();
     }
 
-    // ────────────────────────────────────────────────────────
-    // Orbit ↔ Surface camera switching & orientation
-    // (inspired by your camera.js surface logic)
-    // ────────────────────────────────────────────────────────
-
-    function updateCameraButtons() {
-      btnCamOrbit.classList.toggle('active', cameraMode === 'orbit');
-      btnCamSurface.classList.toggle('active', cameraMode === 'surface');
-    }
-
-    function switchToOrbit() {
-      if (cameraMode === 'orbit') return;
-      cameraMode = 'orbit';
-      controls.enabled = true;
-
-      camera.near = CAMERA_NEAR_ORBIT;
-      camera.updateProjectionMatrix();
-
-      camera.position.copy(orbitSavedPosition);
-      controls.target.copy(orbitSavedTarget);
-      controls.update();
-
-      updateCameraButtons();
-      renderer.domElement.style.cursor = '';
-    }
-
-    function updateSurfaceCamera() {
-      if (cameraMode !== 'surface' || !surfacePos) return;
-
-      // Snap anchor to terrain along the radial direction
-      const baseDir = surfacePos.clone().normalize();
-      const ground = getTerrainPointFromDir(baseDir);
-      surfacePos.copy(ground);
-      surfaceUp.copy(surfacePos.clone().normalize());
-
-      const up = surfaceUp.clone().normalize();
-      let forward = surfaceBaseForward.clone();
-
-      // Rebuild tangent frame
-      forward.sub(up.clone().multiplyScalar(forward.dot(up))).normalize();
-      let right = new THREE.Vector3().crossVectors(forward, up).normalize();
-      forward = new THREE.Vector3().crossVectors(up, right).normalize();
-
-      // Apply yaw around up
-      const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, surfaceYaw);
-      forward.applyQuaternion(yawQuat);
-      right.crossVectors(forward, up).normalize();
-
-      // Apply pitch around local right
-      const pitchQuat = new THREE.Quaternion().setFromAxisAngle(right, surfacePitch);
-      forward.applyQuaternion(pitchQuat);
-      forward.normalize();
-      right.crossVectors(forward, up).normalize();
-
-      surfaceForward.copy(forward);
-      surfaceRight.copy(right);
-
-      // Place camera at eye height above terrain
-      const eyeHeight = SURFACE_EYE_HEIGHT;
-      camera.position.copy(surfacePos.clone().add(up.clone().multiplyScalar(eyeHeight)));
-
-      camera.up.copy(up);
-      const lookTarget = surfacePos.clone().add(forward);
-      camera.lookAt(lookTarget);
-    }
-
-    function goToSurfaceAtDirection(dir, fromCamera) {
-      const radialDir = dir.clone().normalize();
-      const ground = getTerrainPointFromDir(radialDir);
-      const up = ground.clone().normalize();
-
-      // Save orbit state so we can go back cleanly
-      orbitSavedPosition.copy(camera.position);
-      orbitSavedTarget.copy(controls.target);
-
-      surfacePos = ground.clone();
-      surfaceUp.copy(up);
-
-      // Base forward from orbit camera view so the transition is continuous
-      let baseFwd;
-      if (fromCamera) {
-        const camFwd = new THREE.Vector3();
-        fromCamera.getWorldDirection(camFwd);
-        baseFwd = camFwd;
-      } else {
-        baseFwd = new THREE.Vector3(0, 0, 1);
-      }
-      baseFwd.sub(up.clone().multiplyScalar(baseFwd.dot(up))).normalize();
-      if (baseFwd.lengthSq() < 1e-6) baseFwd.set(1, 0, 0);
-      surfaceBaseForward.copy(baseFwd);
-
-      surfaceYaw = 0;
-      surfacePitch = 0;
-
-      cameraMode = 'surface';
-      controls.enabled = false;
-
-      camera.near = CAMERA_NEAR_SURFACE;
-      camera.updateProjectionMatrix();
-
-      updateCameraButtons();
-      renderer.domElement.style.cursor = '';
-
-      updateSurfaceCamera();
-    }
-
-    function autoTiltAndAutoSurface(camera, controls) {
-      if (cameraMode !== 'orbit') return;
-
+    // Auto tilt when approaching the globe
+    function autoTilt(camera, controls) {
       const dist = camera.position.length();
       const altUnits = dist - PLANET_RADIUS;
 
@@ -1980,168 +2087,24 @@
         controls.target.copy(target);
         controls.update();
       }
-
-      // Smooth threshold for auto surface drop
-      if (altUnits <= ALT_AUTO_SURFACE_UNITS) {
-        const viewDir = new THREE.Vector3();
-        camera.getWorldDirection(viewDir);
-        const hit = raySphereIntersection(camera.position, viewDir);
-        if (hit) {
-          const dir = hit.clone().normalize();
-          setHexSelection(dir);
-          goToSurfaceAtDirection(dir, camera);
-        }
-      }
     }
 
-    function updateSurfaceMovement(dt) {
-      if (cameraMode !== 'surface' || !surfacePos) return;
+    // ───────── NKN init & wiring ─────────
 
-      const move = new THREE.Vector3();
-      if (keys.has('KeyW') || keys.has('ArrowUp')) move.add(surfaceForward);
-      if (keys.has('KeyS') || keys.has('ArrowDown')) move.addScaledVector(surfaceForward, -1);
-      if (keys.has('KeyA') || keys.has('ArrowLeft')) move.addScaledVector(surfaceRight, -1);
-      if (keys.has('KeyD') || keys.has('ArrowRight')) move.add(surfaceRight);
-
-      if (move.lengthSq() === 0) return;
-
-      const up = surfaceUp.clone().normalize();
-      const tangentDir = move.sub(up.clone().multiplyScalar(move.dot(up))).normalize();
-
-      const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
-      const speed = SURFACE_WALK_SPEED * (sprint ? SURFACE_SPRINT_MULT : 1.0);
-      const arcLen = speed * dt;
-      const theta = arcLen / PLANET_RADIUS;
-
-      const axis = new THREE.Vector3().crossVectors(tangentDir, up);
-      if (axis.lengthSq() < 1e-12) return;
-      axis.normalize();
-
-      surfacePos.applyAxisAngle(axis, theta);
-      const newDir = surfacePos.clone().normalize();
-      const ground = getTerrainPointFromDir(newDir);
-      surfacePos.copy(ground);
-      surfaceUp.copy(surfacePos.clone().normalize());
-
-      surfaceBaseForward.applyAxisAngle(axis, theta);
-      surfaceBaseForward.sub(surfaceUp.clone().multiplyScalar(surfaceBaseForward.dot(surfaceUp))).normalize();
-
-      updateSurfaceCamera();
+    function updateRelayDataset() {
+      const relay = (relayEl.value.trim() || DEFAULT_FORWARDER);
+      const dataset = datasetEl.value.trim() || 'mapzen';
+      relayEl.value = relay;
+      localStorage.setItem(LS_RELAY, relay);
+      localStorage.setItem(LS_DATASET, dataset);
+      elevationClient.setRelayAndDataset(relay, dataset);
     }
 
-    // Camera buttons in sidebar
-    btnCamOrbit.addEventListener('click', () => {
-      switchToOrbit();
-    });
-
-    btnCamSurface.addEventListener('click', () => {
-      const viewDir = new THREE.Vector3();
-      camera.getWorldDirection(viewDir);
-      const hit = raySphereIntersection(camera.position, viewDir);
-      if (hit) {
-        const dir = hit.clone().normalize();
-        setHexSelection(dir);
-        goToSurfaceAtDirection(dir, camera);
-      }
-    });
-
-    // ────────────────────────────────────────────────────────
-    // Pointer & keyboard input
-    // ────────────────────────────────────────────────────────
-
-    function getSphereIntersectionFromEvent(e) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      clickNDC.set(x, y);
-
-      clickRaycaster.setFromCamera(clickNDC, camera);
-      return raySphereIntersection(clickRaycaster.ray.origin, clickRaycaster.ray.direction);
-    }
-
-    function onPointerDown(e) {
-      if (e.button !== 0 && e.button !== 2) return;
-
-      if (cameraMode === 'orbit') {
-        if (e.button === 0 && e.shiftKey) {
-          const hit = getSphereIntersectionFromEvent(e);
-          if (hit) {
-            e.preventDefault();
-            const dir = hit.clone().normalize();
-            setHexSelection(dir);
-            goToSurfaceAtDirection(dir, camera);
-          }
-        }
-      } else if (cameraMode === 'surface') {
-        if (!isEditableTarget(e.target) && e.button === 0) {
-          lastPointerX = e.clientX;
-          lastPointerY = e.clientY;
-          isPointerDraggingSurfaceLook = true;
-          renderer.domElement.style.cursor = 'grabbing';
-        }
-      }
-    }
-
-    function onPointerMove(e) {
-      if (cameraMode === 'surface' && isPointerDraggingSurfaceLook) {
-        const dx = e.clientX - lastPointerX;
-        const dy = e.clientY - lastPointerY;
-        lastPointerX = e.clientX;
-        lastPointerY = e.clientY;
-
-        const yawSpeed = 0.0025;
-        const pitchSpeed = 0.0025;
-        surfaceYaw -= dx * yawSpeed;
-        surfacePitch -= dy * pitchSpeed;
-        surfacePitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, surfacePitch));
-        updateSurfaceCamera();
-      }
-    }
-
-    function onPointerUp() {
-      if (cameraMode === 'surface') {
-        isPointerDraggingSurfaceLook = false;
-        renderer.domElement.style.cursor = '';
-      }
-    }
-
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-
-    window.addEventListener('keydown', (e) => {
-      if (isEditableTarget(e.target)) return;
-      keys.add(e.code);
-      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space',
-           'KeyW','KeyA','KeyS','KeyD'].includes(e.code)) {
-        e.preventDefault();
-      }
-      if (e.code === 'Escape' && cameraMode === 'surface') {
-        switchToOrbit();
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      keys.delete(e.code);
-    });
-
-    // ────────────────────────────────────────────────────────
-    // Resize
-    // ────────────────────────────────────────────────────────
-
-    function onResize() {
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      viewportHeight = h;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    }
-    window.addEventListener('resize', onResize);
-
-    // ────────────────────────────────────────────────────────
-    // NKN init + relay/dataset binding
-    // ────────────────────────────────────────────────────────
+    relayEl.addEventListener('input', updateRelayDataset);
+    relayEl.addEventListener('change', updateRelayDataset);
+    datasetEl.addEventListener('input', updateRelayDataset);
+    datasetEl.addEventListener('change', updateRelayDataset);
+    updateRelayDataset();
 
     let mc = null;
 
@@ -2174,21 +2137,6 @@
 
     initNKN();
 
-    function updateRelayDataset() {
-      const relay = (relayEl.value.trim() || DEFAULT_FORWARDER);
-      const dataset = datasetEl.value.trim() || 'mapzen';
-      relayEl.value = relay;
-      localStorage.setItem(LS_RELAY, relay);
-      localStorage.setItem(LS_DATASET, dataset);
-      elevationClient.setRelayAndDataset(relay, dataset);
-    }
-
-    relayEl.addEventListener('input', updateRelayDataset);
-    relayEl.addEventListener('change', updateRelayDataset);
-    datasetEl.addEventListener('input', updateRelayDataset);
-    datasetEl.addEventListener('change', updateRelayDataset);
-    updateRelayDataset();
-
     // Elevation config inputs
     function applyElevConfigFromUI() {
       const batchSize = parseInt(cfgBatchSize.value, 10);
@@ -2208,7 +2156,8 @@
     cfgMaxKBPerMin.addEventListener('change', applyElevConfigFromUI);
     applyElevConfigFromUI();
 
-    // LOD mode toggle
+    // LOD mode
+    let lodMode = 'orbit';
     function updateLodButtons() {
       btnLodOrbit.classList.toggle('active', lodMode === 'orbit');
       btnLodZoom.classList.toggle('active', lodMode === 'zoom');
@@ -2224,9 +2173,8 @@
       updateLodButtons();
     });
     updateLodButtons();
-    updateCameraButtons();
 
-    // LOD budget config
+    // LOD budgets
     cfgTileBudget.value = triTree.tileBudget;
     cfgSplitBudget.value = triTree.splitBudget;
     cfgMergeBudget.value = triTree.mergeBudget;
@@ -2240,6 +2188,50 @@
     cfgSplitBudget.addEventListener('change', applyLodBudgetsFromUI);
     cfgMergeBudget.addEventListener('change', applyLodBudgetsFromUI);
 
+    // Imagery config
+    function applyImageryConfigFromUI() {
+      const enabled = cfgImageryEnabled.checked;
+      const versionId = cfgImageryVersion.value.trim() || '49849';
+      const zoom = parseInt(cfgImageryZoom.value, 10);
+      cfgImageryVersion.value = versionId;
+      triTree.setImageryConfig({ enabled, versionId, zoom });
+    }
+    cfgImageryEnabled.addEventListener('change', applyImageryConfigFromUI);
+    cfgImageryVersion.addEventListener('change', applyImageryConfigFromUI);
+    cfgImageryZoom.addEventListener('change', applyImageryConfigFromUI);
+    applyImageryConfigFromUI();
+
+    btnImageryPreview.addEventListener('click', () => {
+      const cfg = imageryManager.getConfig();
+      const enabled = cfg.enabled;
+      const z = cfg.zoom;
+      if (!enabled) {
+        imageryPreviewImg.removeAttribute('src');
+        imageryUrlEl.textContent = 'Imagery disabled.';
+        return;
+      }
+      const viewDir = new THREE.Vector3();
+      camera.getWorldDirection(viewDir);
+      const hit = raySphereIntersection(camera.position, viewDir);
+      if (!hit) {
+        imageryPreviewImg.removeAttribute('src');
+        imageryUrlEl.textContent = 'Camera not intersecting globe.';
+        return;
+      }
+      const ll = worldPosToLatLon(hit);
+      if (!ll) {
+        imageryPreviewImg.removeAttribute('src');
+        imageryUrlEl.textContent = 'Lat/lon unavailable.';
+        return;
+      }
+      const coords = lonLatToTileCoords(ll.lonDeg, ll.latDeg, z);
+      const url = imageryManager.buildUrl(cfg.versionId, z, coords.x, coords.y);
+      imageryPreviewImg.src = url + (url.includes('?') ? '&' : '?') + 'ts=' + Date.now();
+      imageryUrlEl.textContent =
+        `z/x/y: ${z}/${coords.x}/${coords.y} · center: ${ll.latDeg.toFixed(6)}, ${ll.lonDeg.toFixed(6)}\n` +
+        url;
+    });
+
     // Debug toggle
     debugToggle.addEventListener('click', () => {
       perf.enabled = !perf.enabled;
@@ -2250,6 +2242,40 @@
         perf.lastPanelUpdate = 0;
       }
     });
+
+    // Pointer: Shift+click to set hex patch
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (!e.shiftKey) return;
+      if (isEditableTarget(e.target)) return;
+      const hit = getSphereIntersectionFromEvent(e, renderer, camera);
+      if (hit) {
+        const dir = hit.clone().normalize();
+        setHexSelection(dir);
+      }
+    });
+
+    // Keyboard: Esc closes sidebar
+    window.addEventListener('keydown', (e) => {
+      if (isEditableTarget(e.target)) return;
+      if (e.code === 'Escape') {
+        if (sidebar.classList.contains('open')) {
+          closeSidebar();
+          e.preventDefault();
+        }
+      }
+    });
+
+    // Resize
+    function onResize() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      viewportHeight = h;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', onResize);
 
     // ────────────────────────────────────────────────────────
     // Animation loop
@@ -2268,19 +2294,13 @@
         perf.frameStart = performance.now();
       }
 
-      if (cameraMode === 'orbit') {
-        perfStart('controls');
-        controls.update();
-        autoTiltAndAutoSurface(camera, controls);
-        perfEnd('controls');
-      } else {
-        perfStart('surface-move');
-        updateSurfaceMovement(dt);
-        perfEnd('surface-move');
-      }
+      perfStart('controls');
+      controls.update();
+      autoTilt(camera, controls);
+      perfEnd('controls');
 
       perfStart('lod');
-      triTree.update(camera, cameraMode === 'surface');
+      triTree.update(camera);
       perfEnd('lod');
 
       perfStart('elevation');
@@ -2336,22 +2356,15 @@
         metricRatio.textContent = '–';
       }
 
-      // Track and display current lat/lon (surface anchor or orbit focus)
+      // Lat/lon at view center
       let latlonStr = '–';
-      if (cameraMode === 'surface' && surfacePos) {
-        const ll = worldPosToLatLon(surfacePos);
+      const vDir = new THREE.Vector3();
+      camera.getWorldDirection(vDir);
+      const hit = raySphereIntersection(camera.position, vDir);
+      if (hit) {
+        const ll = worldPosToLatLon(hit);
         if (ll) {
           latlonStr = `${ll.latDeg.toFixed(4)}°, ${ll.lonDeg.toFixed(4)}°`;
-        }
-      } else {
-        const vDir = new THREE.Vector3();
-        camera.getWorldDirection(vDir);
-        const hit = raySphereIntersection(camera.position, vDir);
-        if (hit) {
-          const ll = worldPosToLatLon(hit);
-          if (ll) {
-            latlonStr = `${ll.latDeg.toFixed(4)}°, ${ll.lonDeg.toFixed(4)}°`;
-          }
         }
       }
       metricLatLon.textContent = latlonStr;
