@@ -216,3 +216,7 @@ curl "http://localhost:5000/v1/mapzen?locations=45.356548,-122.597800|45.356548,
 ---
 
 That’s it — you can route via HTTP directly or DM your relay with the same semantics, choose **lat/lng** or **geohash**, and stream results progressively.
+
+<a href="http://www.wtfpl.net/"><img
+       src="http://www.wtfpl.net/wp-content/uploads/2012/12/wtfpl-badge-4.png"
+       width="80" height="15" alt="WTFPL" /></a>
