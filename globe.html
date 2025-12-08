@@ -2,154 +2,462 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>TriTree Planet – Hex Patch on Sphere</title>
+  <title>NKN Tritree Globe — Progressive Elevation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- NKN SDK UMD (global `nkn`) with fallback -->
+  <script src="https://cdn.jsdelivr.net/gh/nknorg/nkn-sdk-js/dist/nkn.min.js"
+          onerror="(function(){var s=document.createElement('script');s.src='https://nkn.org/nkn.min.js';document.head.appendChild(s);}())"></script>
+
+  <!-- Three.js via import map -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+
   <style>
     :root {
       --bg: #020617;
       --panel: #020617cc;
       --accent: #22d3ee;
       --accent-soft: #38bdf8;
+      --accent-strong: #06b6d4;
       --text: #e5e7eb;
       --muted: #9ca3af;
+      --ok: #4ade80;
+      --bad: #f97373;
     }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
+    *{box-sizing:border-box;}
+    html,body{
+      margin:0;
+      padding:0;
+      width:100%;
+      height:100%;
+      overflow:hidden;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
         "Segoe UI", sans-serif;
       background: radial-gradient(circle at top, #0f172a 0, #020617 55%);
       color: var(--text);
     }
-    #app {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
+    #app{
+      position:fixed;
+      inset:0;
+      display:flex;
+      flex-direction:column;
     }
-    #toolbar {
-      padding: 10px 14px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-      pointer-events: auto;
-      background: linear-gradient(to bottom,
-        rgba(15,23,42,0.9),
-        rgba(15,23,42,0.72),
+    #toolbar{
+      padding:10px 14px;
+      display:flex;
+      flex-wrap:wrap;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      pointer-events:auto;
+      background:linear-gradient(to bottom,
+        rgba(15,23,42,0.95),
+        rgba(15,23,42,0.75),
         rgba(15,23,42,0));
-      z-index: 10;
+      z-index:10;
     }
-    #title {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      white-space: nowrap;
+    #toolbar-left{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
     }
-    #hint {
-      font-size: 12px;
-      color: var(--muted);
+    #title{
+      font-size:14px;
+      font-weight:600;
+      letter-spacing:0.02em;
+      white-space:nowrap;
     }
-    .pill {
-      padding: 4px 8px;
-      border-radius: 999px;
-      border: 1px solid #1f2937;
-      background: #02061799;
-      font-size: 11px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+    #hint{
+      font-size:12px;
+      color:var(--muted);
     }
-    .pill span.key {
-      padding: 1px 6px;
-      border-radius: 999px;
-      border: 1px solid #1f2937;
-      background: #020617;
-      font-size: 10px;
-      color: var(--accent-soft);
-      font-weight: 500;
+    .pill{
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid #1f2937;
+      background:#02061799;
+      font-size:11px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
     }
-    #three-container {
-      flex: 1;
-      position: relative;
+    .pill span.key{
+      padding:1px 6px;
+      border-radius:999px;
+      border:1px solid #1f2937;
+      background:#020617;
+      font-size:10px;
+      color:var(--accent-soft);
+      font-weight:500;
     }
-    #three-container canvas {
-      display: block;
+    #toolbar-right{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:10px;
+      font-size:11px;
     }
-    #metrics {
-      position: absolute;
-      right: 10px;
-      bottom: 10px;
-      padding: 6px 10px;
-      border-radius: 12px;
-      background: var(--panel);
-      border: 1px solid #1e293b;
-      font-size: 11px;
-      color: var(--muted);
-      pointer-events: none;
-      backdrop-filter: blur(10px);
-      min-width: 150px;
+    .field-group{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:160px;
     }
-    #metrics strong {
-      color: var(--accent-soft);
-      font-weight: 500;
+    .field-group label{
+      font-size:11px;
+      color:var(--muted);
+    }
+    .field-group input{
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid #1f2937;
+      background:#02061799;
+      color:var(--text);
+      outline:none;
+      font-size:11px;
+      min-width:0;
+    }
+    .field-group input:focus{
+      border-color:var(--accent-soft);
+      box-shadow:0 0 0 1px rgba(56,189,248,0.35);
+    }
+    #sdkStatus, #connStatus{
+      font-size:11px;
+    }
+    #sdkStatus .ok, #connStatus .ok{color:var(--ok);}
+    #sdkStatus .bad, #connStatus .bad{color:var(--bad);}
+    #three-container{
+      flex:1;
+      position:relative;
+    }
+    #three-container canvas{
+      display:block;
+    }
+    #metrics{
+      position:absolute;
+      right:10px;
+      bottom:10px;
+      padding:6px 10px;
+      border-radius:12px;
+      background:var(--panel);
+      border:1px solid #1e293b;
+      font-size:11px;
+      color:var(--muted);
+      pointer-events:none;
+      backdrop-filter:blur(10px);
+      min-width:180px;
+    }
+    #metrics strong{
+      color:var(--accent-soft);
+      font-weight:500;
+    }
+    #metrics .value{
+      color:var(--text);
     }
   </style>
 </head>
 <body>
 <div id="app">
   <div id="toolbar">
-    <div id="title">TriTree Planet · Hex Patch on Sphere</div>
-    <div id="hint" class="pill">
-      <span class="key">Drag</span> orbit
-      <span class="key">Wheel</span> zoom
-      <span class="key">Shift + Drag</span> draw hex patch
+    <div id="toolbar-left">
+      <div id="title">NKN Tritree Globe · Progressive Elevation</div>
+      <div id="hint">
+        Drag to orbit · Wheel to zoom · <span class="pill">
+        <span class="key">Shift + drag</span> draw hex patch on planet
+        </span>
+      </div>
+    </div>
+    <div id="toolbar-right">
+      <div class="field-group">
+        <label for="relay">Forwarder address</label>
+        <input id="relay" type="text" placeholder="forwarder.… or pubkey" />
+      </div>
+      <div class="field-group">
+        <label for="dataset">Dataset</label>
+        <input id="dataset" type="text" value="mapzen" />
+      </div>
+      <div class="field-group">
+        <label>My NKN address</label>
+        <div id="myAddr" style="font-size:11px; padding:4px 8px; border-radius:999px; border:1px dashed #1f2937; min-width:140px;">
+          —
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:160px;">
+        <div id="sdkStatus">Loading nkn-sdk…</div>
+        <div id="connStatus">Not connected</div>
+      </div>
     </div>
   </div>
   <div id="three-container">
     <div id="metrics">
-      <div><strong>Tiles</strong> <span id="metric-tiles">–</span></div>
-      <div><strong>Max level</strong> <span id="metric-level">–</span></div>
-      <div><strong>Hex radius</strong> <span id="metric-hex">none</span></div>
+      <div><strong>Tiles</strong> <span class="value" id="metric-tiles">–</span></div>
+      <div><strong>Max level</strong> <span class="value" id="metric-level">–</span></div>
+      <div><strong>Hex radius</strong> <span class="value" id="metric-hex">none</span></div>
+      <div><strong>Elev batches</strong> <span class="value" id="metric-batches">0</span></div>
+      <div><strong>Vertices cached</strong> <span class="value" id="metric-verts">0</span></div>
     </div>
   </div>
 </div>
 
 <script type="module">
-  import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
-  import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
   // ──────────────────────────────────────────────────────────────
   // Constants & helpers
   // ──────────────────────────────────────────────────────────────
 
   const PLANET_RADIUS = 1.0;
-  const MAX_LEVEL = 4;            // Max tritree depth
-  const BASE_RESOLUTION = 6;      // Barycentric grid resolution at level 0
-  const RES_PER_LEVEL = 2;        // Extra resolution per level
-  const DEG2RAD = Math.PI / 180;
+  const EARTH_RADIUS_M = 6_371_000;
+  const ELEVATION_EXAGGERATION = 10.0; // exaggerate vertical relief
+  const MAX_TILE_LEVEL = 5;            // cap subdivision depth
 
-  function sampleHeight(dir) {
-    // Simple analytic height field so tiles visibly "protrude" from the sphere.
-    // Uses direction components; continuous across tiles.
-    const k = 6.0;
-    const a = Math.sin(k * dir.x + 1.234);
-    const b = Math.sin(k * dir.y * 1.3 + 2.345);
-    const c = Math.sin(k * dir.z * 0.7 + 3.456);
-    const h = (a + b + c) / 3;    // [-1, 1]
-    return 0.05 * h;              // ±5% of radius
+  const DEG2RAD = Math.PI / 180;
+  const RAD2DEG = 180 / Math.PI;
+
+  // Default forwarder address (can be overridden via input)
+  const DEFAULT_FORWARDER =
+    'forwarder.5d7bdb47e1c757508d28f5726469afa1f7c93bd037a1940aa0dab97ab421c833';
+
+  const tilesPendingNormals = new Set();
+
+  function dirToLatLon(dir) {
+    // y = up, z = north, x = east
+    const y = THREE.MathUtils.clamp(dir.y, -1, 1);
+    const lat = Math.asin(y);
+    const lon = Math.atan2(dir.x, dir.z);
+    return {
+      latDeg: THREE.MathUtils.radToDeg(lat),
+      lonDeg: THREE.MathUtils.radToDeg(lon)
+    };
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Triangular tile (tritree leaf / node)
+  // NKN plumbing (sendWithReply + reply matching)
+  // ──────────────────────────────────────────────────────────────
+
+  const pending = new Map();
+  let lastPayloadBytes = 0;
+
+  function uuidv4(){
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+      const r = Math.random()*16|0, v = c==='x'?r:(r&0x3|0x8); return v.toString(16);
+    });
+  }
+
+  function sendWithReply(mc, dest, obj, timeoutMs = 25000) {
+    const id = obj.id || uuidv4();
+    obj.id = id;
+    const encoded = new TextEncoder().encode(JSON.stringify(obj));
+    lastPayloadBytes = encoded.length;
+
+    const p = new Promise((resolve, reject) => {
+      const t = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error('DM reply timeout'));
+      }, timeoutMs);
+      pending.set(id, { resolve, timeout: t });
+    });
+
+    mc.send(dest, JSON.stringify(obj)).catch(err => {
+      const st = pending.get(id);
+      if (st){ clearTimeout(st.timeout); pending.delete(id); }
+      console.error('NKN send error:', err && err.message || err);
+    });
+
+    return p;
+  }
+
+  function handleIncoming(src, payload) {
+    const text = (typeof payload === 'string')
+      ? payload
+      : new TextDecoder().decode(payload);
+    let msg;
+    try {
+      msg = JSON.parse(text);
+    } catch {
+      console.log('📥 incoming (raw):', text);
+      return;
+    }
+    if (msg && msg.type === 'http.response' && msg.id && pending.has(msg.id)) {
+      const st = pending.get(msg.id);
+      clearTimeout(st.timeout);
+      pending.delete(msg.id);
+      st.resolve(msg);
+      return;
+    }
+    console.log('📥 unsolicited from', src, msg);
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Elevation client (vertex‑first, radial priority from camera)
+  // ──────────────────────────────────────────────────────────────
+
+  class ElevationClient {
+    constructor() {
+      this.mc = null;
+      this.relayDest = '';
+      this.dataset = 'mapzen';
+
+      this.vertexMap = new Map(); // key -> record
+      this.cameraPos = new THREE.Vector3();
+
+      this.maxConcurrentBatches = 2;
+      this.currentBatches = 0;
+      this.batchSize = 80;
+      this.minIntervalMs = 250;
+      this.lastScheduleTime = 0;
+    }
+
+    setMultiClient(mc) {
+      this.mc = mc;
+    }
+
+    setRelayAndDataset(relay, dataset) {
+      this.relayDest = (relay || '').trim();
+      this.dataset = (dataset || 'mapzen').trim();
+    }
+
+    registerVertex(latDeg, lonDeg, dir, tile, index) {
+      const key = `${latDeg.toFixed(6)},${lonDeg.toFixed(6)}`;
+      let rec = this.vertexMap.get(key);
+      if (!rec) {
+        rec = {
+          key,
+          lat: latDeg,
+          lng: lonDeg,
+          dir,
+          clients: [],
+          status: 'new',
+          distance: Infinity,
+          height: 0
+        };
+        this.vertexMap.set(key, rec);
+      }
+      rec.clients.push({ tile, index });
+    }
+
+    updateCamera(camera) {
+      this.cameraPos.copy(camera.position);
+    }
+
+    tick() {
+      if (!this.mc || !this.relayDest) return;
+      if (this.currentBatches >= this.maxConcurrentBatches) return;
+
+      const now = performance.now();
+      if (now - this.lastScheduleTime < this.minIntervalMs) return;
+      this.lastScheduleTime = now;
+
+      const cameraPos = this.cameraPos;
+      const candidates = [];
+
+      for (const rec of this.vertexMap.values()) {
+        if (rec.status === 'new') {
+          const worldPos = rec.dir.clone().multiplyScalar(PLANET_RADIUS);
+          rec.distance = worldPos.distanceTo(cameraPos);
+          candidates.push(rec);
+        }
+      }
+
+      if (!candidates.length) return;
+
+      candidates.sort((a, b) => a.distance - b.distance);
+      const batch = candidates.slice(0, this.batchSize);
+      for (const rec of batch) {
+        rec.status = 'pending';
+      }
+
+      const locations = batch.map(r => ({
+        lat: r.lat,
+        lng: r.lng
+      }));
+
+      const payload = {
+        type: 'elev.query',
+        dataset: this.dataset,
+        locations
+      };
+
+      const thisBatch = batch;
+      this.currentBatches++;
+
+      sendWithReply(this.mc, this.relayDest, payload, 45000)
+        .then(resp => {
+          let json = null;
+          try {
+            if (resp.body_b64) {
+              const decoded = atob(resp.body_b64);
+              json = JSON.parse(decoded);
+            } else if (resp.body) {
+              json = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;
+            }
+          } catch (e) {
+            console.error('[elev] bad JSON', e);
+          }
+
+          if (!json || !Array.isArray(json.results)) {
+            console.warn('[elev] unexpected response format', json);
+            for (const rec of thisBatch) {
+              if (rec.status === 'pending') rec.status = 'error';
+            }
+            return;
+          }
+
+          for (const r of json.results) {
+            if (!r.location) continue;
+            const key = `${(+r.location.lat).toFixed(6)},${(+r.location.lng).toFixed(6)}`;
+            const rec = this.vertexMap.get(key);
+            if (!rec) continue;
+
+            const elev = Number.isFinite(r.elevation) ? Number(r.elevation) : 0;
+            rec.height = elev;
+            rec.status = 'done';
+
+            for (const ref of rec.clients) {
+              ref.tile.updateVertex(ref.index, elev);
+            }
+          }
+
+          for (const rec of thisBatch) {
+            if (rec.status === 'pending') {
+              rec.status = 'error';
+            }
+          }
+        })
+        .catch(err => {
+          console.error('[elev] batch failed', err);
+          for (const rec of thisBatch) {
+            if (rec.status === 'pending') rec.status = 'error';
+          }
+        })
+        .finally(() => {
+          this.currentBatches--;
+        });
+    }
+
+    getStats() {
+      return {
+        totalVertices: this.vertexMap.size,
+        currentBatches: this.currentBatches
+      };
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Triangular tile (spherical tritree node)
   // ──────────────────────────────────────────────────────────────
 
   class TriTile {
-    constructor(v0, v1, v2, level = 0, index = 0, parent = null, radius = PLANET_RADIUS) {
+    constructor(v0, v1, v2, level = 0, index = 0, parent = null, radius = PLANET_RADIUS, elevationClient = null) {
       this.v0 = v0.clone().normalize();
       this.v1 = v1.clone().normalize();
       this.v2 = v2.clone().normalize();
@@ -157,10 +465,13 @@
       this.index = index;
       this.parent = parent;
       this.radius = radius;
+      this.elevationClient = elevationClient;
 
       this.children = null;
       this.geometry = null;
       this.mesh = null;
+      this.baseDirs = null;
+      this.positionAttr = null;
 
       this.centerDir = new THREE.Vector3()
         .add(this.v0)
@@ -184,14 +495,10 @@
 
       const childLevel = this.level + 1;
       this.children = [
-        // center
-        new TriTile(mid01, mid12, mid20, childLevel, this.index * 4, this, this.radius),
-        // v0 corner
-        new TriTile(this.v0, mid01, mid20, childLevel, this.index * 4 + 1, this, this.radius),
-        // v1 corner
-        new TriTile(this.v1, mid12, mid01, childLevel, this.index * 4 + 2, this, this.radius),
-        // v2 corner
-        new TriTile(this.v2, mid20, mid12, childLevel, this.index * 4 + 3, this, this.radius),
+        new TriTile(mid01, mid12, mid20, childLevel, this.index * 4,     this, this.radius, this.elevationClient),
+        new TriTile(this.v0, mid01, mid20, childLevel, this.index * 4+1, this, this.radius, this.elevationClient),
+        new TriTile(this.v1, mid12, mid01, childLevel, this.index * 4+2, this, this.radius, this.elevationClient),
+        new TriTile(this.v2, mid20, mid12, childLevel, this.index * 4+3, this, this.radius, this.elevationClient),
       ];
       return this.children;
     }
@@ -199,15 +506,19 @@
     buildGeometry() {
       if (this.geometry) return this.geometry;
 
-      const res = Math.min(BASE_RESOLUTION + this.level * RES_PER_LEVEL, 20);
-      const positions = [];
+      const baseRes = 6;
+      const resPerLevel = 2;
+      const res = Math.min(baseRes + this.level * resPerLevel, 22);
+
+      const vertices = [];
+      const dirs = [];
       const indices = [];
 
       const v0 = this.v0;
       const v1 = this.v1;
       const v2 = this.v2;
 
-      // Barycentric subdivision on the sphere
+      let idx = 0;
       for (let i = 0; i <= res; i++) {
         for (let j = 0; j <= res - i; j++) {
           const k = res - i - j;
@@ -219,22 +530,24 @@
           let py = w0 * v0.y + w1 * v1.y + w2 * v2.y;
           let pz = w0 * v0.z + w1 * v1.z + w2 * v2.z;
 
-          const len = Math.sqrt(px * px + py * py + pz * pz) || 1;
+          const len = Math.sqrt(px*px + py*py + pz*pz) || 1;
           px /= len; py /= len; pz /= len;
 
           const dir = new THREE.Vector3(px, py, pz);
-          const h = sampleHeight(dir);
-          const r = this.radius * (1.0 + h);
 
-          positions.push(
-            dir.x * r,
-            dir.y * r,
-            dir.z * r
-          );
+          const r = this.radius;
+          vertices.push(dir.x * r, dir.y * r, dir.z * r);
+          dirs.push(dir.x, dir.y, dir.z);
+
+          if (this.elevationClient) {
+            const { latDeg, lonDeg } = dirToLatLon(dir);
+            this.elevationClient.registerVertex(latDeg, lonDeg, dir.clone(), this, idx);
+          }
+
+          idx++;
         }
       }
 
-      // Triangle indices (same layout as triangleWorker)
       let vIdx = 0;
       for (let i = 0; i < res; i++) {
         const rowStart = vIdx;
@@ -257,16 +570,20 @@
         vIdx = nextRowStart;
       }
 
+      const positionArray = new Float32Array(vertices);
+      const baseDirArray = new Float32Array(dirs);
+      const indexArray = new Uint32Array(indices);
+
       const geom = new THREE.BufferGeometry();
-      geom.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(positions, 3)
-      );
-      geom.setIndex(indices);
+      geom.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
+      geom.setIndex(new THREE.BufferAttribute(indexArray, 1));
       geom.computeVertexNormals();
-      geom.computeBoundingSphere();
+      geom.attributes.position.setUsage(THREE.DynamicDrawUsage);
 
       this.geometry = geom;
+      this.baseDirs = baseDirArray;
+      this.positionAttr = geom.getAttribute('position');
+
       return geom;
     }
 
@@ -291,13 +608,33 @@
         child.hideDescendants();
       }
     }
+
+    updateVertex(index, elevMeters) {
+      if (!this.positionAttr || !this.baseDirs) return;
+      const base = this.baseDirs;
+      const pos = this.positionAttr.array;
+
+      const bx = base[index*3 + 0];
+      const by = base[index*3 + 1];
+      const bz = base[index*3 + 2];
+
+      const rel = (elevMeters * ELEVATION_EXAGGERATION) / EARTH_RADIUS_M;
+      const r = this.radius * (1 + rel);
+
+      pos[index*3 + 0] = bx * r;
+      pos[index*3 + 1] = by * r;
+      pos[index*3 + 2] = bz * r;
+
+      this.positionAttr.needsUpdate = true;
+      tilesPendingNormals.add(this);
+    }
   }
 
   // ──────────────────────────────────────────────────────────────
   // Icosahedron → root tiles
   // ──────────────────────────────────────────────────────────────
 
-  function createIcosahedronTiles(radius = PLANET_RADIUS) {
+  function createIcosahedronTiles(radius, elevationClient) {
     const t = (1 + Math.sqrt(5)) / 2;
     const verts = [
       new THREE.Vector3(-1,  t,  0).normalize(),
@@ -327,30 +664,34 @@
     for (let i = 0; i < faces.length; i++) {
       const [i0, i1, i2] = faces[i];
       tiles.push(
-        new TriTile(verts[i0], verts[i1], verts[i2], 0, i, null, radius)
+        new TriTile(verts[i0], verts[i1], verts[i2], 0, i, null, radius, elevationClient)
       );
     }
     return tiles;
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Tritree manager (simplified, efficiency‑aware)
+  // Tritree manager (LOD by view direction + zoom + hex patch)
   // ──────────────────────────────────────────────────────────────
 
-  class SimpleTriTreeManager {
-    constructor(scene, radius = PLANET_RADIUS) {
+  class TriTreeManager {
+    constructor(scene, elevationClient, radius = PLANET_RADIUS) {
       this.scene = scene;
       this.radius = radius;
-      this.rootTiles = createIcosahedronTiles(radius);
+      this.elevationClient = elevationClient;
+
+      this.rootTiles = createIcosahedronTiles(radius, elevationClient);
       this.material = new THREE.MeshStandardMaterial({
         color: 0x4b5563,
         metalness: 0.0,
-        roughness: 0.9,
+        roughness: 0.95,
         flatShading: false,
+        side: THREE.DoubleSide, // make all patches double-sided
       });
-      this.hexPatch = null;
+
       this.visibleTileCount = 0;
       this.currentMaxLevel = 0;
+      this.hexPatch = null; // { centerDir, radius }
 
       for (const tile of this.rootTiles) {
         tile.ensureMesh(this.scene, this.material);
@@ -364,48 +705,57 @@
       } else {
         this.hexPatch = {
           centerDir: centerDir.clone().normalize(),
-          radius,
+          radius
         };
       }
     }
 
-    shouldSplitTile(tile) {
-      if (tile.level >= MAX_LEVEL) return false;
+    _desiredLevelForTile(tile, camera) {
+      const camPos = camera.position.clone();
+      const surfaceDir = camPos.normalize(); // direction of "front" point on sphere
+      const dotCam = THREE.MathUtils.clamp(tile.centerDir.dot(surfaceDir), -1, 1);
+      const angleToCam = Math.acos(dotCam);
+      const angleDeg = angleToCam * RAD2DEG;
+
+      let levelFromCam;
+      if (angleDeg > 85) levelFromCam = 0;
+      else if (angleDeg > 65) levelFromCam = 1;
+      else if (angleDeg > 45) levelFromCam = 2;
+      else if (angleDeg > 25) levelFromCam = 3;
+      else if (angleDeg > 12) levelFromCam = 4;
+      else levelFromCam = 5;
+
+      const dist = camera.position.length();
+      if (dist < 2.0) levelFromCam += 2;
+      else if (dist < 2.8) levelFromCam += 1;
+
+      let levelFromPatch = 0;
       const patch = this.hexPatch;
-      if (!patch || !patch.centerDir) {
-        // No hex yet: just keep level 0 tiles
-        return false;
+      if (patch && patch.centerDir) {
+        const dotP = THREE.MathUtils.clamp(tile.centerDir.dot(patch.centerDir), -1, 1);
+        const angleToPatch = Math.acos(dotP);
+
+        if (angleToPatch - tile.angularRadius <= patch.radius * 1.1) {
+          if (angleToPatch < patch.radius * 0.3) levelFromPatch = MAX_TILE_LEVEL;
+          else if (angleToPatch < patch.radius * 0.6) levelFromPatch = Math.max(4, MAX_TILE_LEVEL - 1);
+          else levelFromPatch = 3;
+        }
       }
 
-      const centerDir = tile.centerDir;
-      const patchDir = patch.centerDir;
-      const patchRadius = patch.radius;
-
-      const dot = THREE.MathUtils.clamp(centerDir.dot(patchDir), -1, 1);
-      const angle = Math.acos(dot);
-
-      // If the tile is fully outside the patch (with a small margin), don't split
-      if (angle - tile.angularRadius > patchRadius * 1.1) {
-        return false;
-      }
-
-      // Inside or intersecting the patch:
-      // keep subdividing until tile angular radius is small compared
-      // to the patch radius.
-      const targetArc = patchRadius / 5; // roughly ~10 tiles across diameter
-      return tile.angularRadius > targetArc * 1.1 && tile.level < MAX_LEVEL;
+      let desired = Math.max(levelFromCam, levelFromPatch);
+      desired = Math.max(0, Math.min(MAX_TILE_LEVEL, desired));
+      return desired;
     }
 
-    update(camera) {
-      this.visibleTileCount = 0;
-      this.currentMaxLevel = 0;
-      for (const root of this.rootTiles) {
-        this._updateTileLOD(root);
-      }
+    _shouldSplitTile(tile, camera) {
+      if (tile.level >= MAX_TILE_LEVEL) return false;
+
+      const desired = this._desiredLevelForTile(tile, camera);
+      return tile.level < desired;
     }
 
-    _updateTileLOD(tile) {
-      const split = this.shouldSplitTile(tile);
+    _updateTileLOD(tile, camera) {
+      const split = this._shouldSplitTile(tile, camera);
 
       if (split) {
         tile.subdivide();
@@ -416,7 +766,7 @@
             child.setVisible(true);
             this.visibleTileCount++;
             this.currentMaxLevel = Math.max(this.currentMaxLevel, child.level);
-            this._updateTileLOD(child);
+            this._updateTileLOD(child, camera);
           }
         }
       } else {
@@ -432,216 +782,304 @@
         }
       }
     }
+
+    update(camera) {
+      this.visibleTileCount = 0;
+      this.currentMaxLevel = 0;
+      for (const root of this.rootTiles) {
+        this._updateTileLOD(root, camera);
+      }
+    }
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Scene / camera / renderer
+  // Main scene setup
   // ──────────────────────────────────────────────────────────────
 
-  const container = document.getElementById('three-container');
-  const metricsTiles = document.getElementById('metric-tiles');
-  const metricsLevel = document.getElementById('metric-level');
-  const metricsHex = document.getElementById('metric-hex');
+  window.addEventListener('load', () => {
+    const container = document.getElementById('three-container');
+    const metricTiles = document.getElementById('metric-tiles');
+    const metricLevel = document.getElementById('metric-level');
+    const metricHex = document.getElementById('metric-hex');
+    const metricBatches = document.getElementById('metric-batches');
+    const metricVerts = document.getElementById('metric-verts');
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
-  container.appendChild(renderer.domElement);
+    const relayEl = document.getElementById('relay');
+    const datasetEl = document.getElementById('dataset');
+    const myAddrEl = document.getElementById('myAddr');
+    const sdkStatusEl = document.getElementById('sdkStatus');
+    const connStatusEl = document.getElementById('connStatus');
 
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#020617');
+    const LS_RELAY = 'nkn.globe.relay';
+    const LS_DATASET = 'nkn.globe.dataset';
 
-  const camera = new THREE.PerspectiveCamera(
-    45,
-    container.clientWidth / container.clientHeight,
-    0.1,
-    50
-  );
-  camera.position.set(0, 0, 3.5);
-  camera.lookAt(0, 0, 0);
+    // Load saved relay/dataset or default to built-in forwarder
+    relayEl.value = localStorage.getItem(LS_RELAY) || DEFAULT_FORWARDER;
+    datasetEl.value = localStorage.getItem(LS_DATASET) || 'mapzen';
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.minDistance = 1.2;
-  controls.maxDistance = 6.0;
-
-  // Lights
-  const hemi = new THREE.HemisphereLight(0x93c5fd, 0x020617, 0.6);
-  scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-  dir.position.set(3, 4, 2);
-  scene.add(dir);
-
-  // ──────────────────────────────────────────────────────────────
-  // Tritree planet
-  // ──────────────────────────────────────────────────────────────
-
-  const triTree = new SimpleTriTreeManager(scene, PLANET_RADIUS);
-
-  // ──────────────────────────────────────────────────────────────
-  // Hex patch on the planet (Shift + drag)
-  // ──────────────────────────────────────────────────────────────
-
-  const raycaster = new THREE.Raycaster();
-  const mouseNDC = new THREE.Vector2();
-
-  const hexGeometry = new THREE.BufferGeometry();
-  const hexMaterial = new THREE.LineBasicMaterial({
-    color: 0x22d3ee,
-    linewidth: 2
-  });
-  const hexLine = new THREE.LineLoop(hexGeometry, hexMaterial);
-  hexLine.visible = false;
-  scene.add(hexLine);
-
-  const hexPatch = {
-    centerDir: null,
-    radius: 0
-  };
-
-  let drawingHex = false;
-
-  function getSphereIntersection(event) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    mouseNDC.set(x, y);
-
-    raycaster.setFromCamera(mouseNDC, camera);
-    const origin = raycaster.ray.origin.clone();
-    const dirRay = raycaster.ray.direction.clone().normalize();
-
-    // Ray-sphere intersection (center at 0, radius PLANET_RADIUS)
-    const oc = origin; // since center is (0,0,0)
-    const b = oc.dot(dirRay);
-    const c = oc.lengthSq() - PLANET_RADIUS * PLANET_RADIUS;
-    const disc = b * b - c;
-    if (disc < 0) return null;
-    let t = -b - Math.sqrt(disc);
-    if (t < 0) t = -b + Math.sqrt(disc);
-    if (t < 0) return null;
-    return origin.add(dirRay.multiplyScalar(t));
-  }
-
-  function updateHexVisualization() {
-    if (!hexPatch.centerDir || hexPatch.radius <= 0) {
-      hexLine.visible = false;
-      metricsHex.textContent = 'none';
-      triTree.setHexPatch(null, 0);
-      return;
-    }
-
-    const segments = 6;
-    const positions = new Float32Array((segments + 1) * 3);
-    const c = hexPatch.centerDir.clone().normalize();
-    const r = hexPatch.radius;
-
-    // Build tangent basis (east/north) around centerDir
-    let up = new THREE.Vector3(0, 1, 0);
-    if (Math.abs(up.dot(c)) > 0.98) {
-      up = new THREE.Vector3(1, 0, 0);
-    }
-    const east = new THREE.Vector3().crossVectors(up, c).normalize();
-    const north = new THREE.Vector3().crossVectors(c, east).normalize();
-
-    for (let k = 0; k < segments; k++) {
-      const phi = (Math.PI / 3) * k; // flat‑top hex
-      const tangent = new THREE.Vector3()
-        .copy(east).multiplyScalar(Math.cos(phi))
-        .add(new THREE.Vector3().copy(north).multiplyScalar(Math.sin(phi)));
-
-      const dir = new THREE.Vector3()
-        .copy(c).multiplyScalar(Math.cos(r))
-        .add(tangent.multiplyScalar(Math.sin(r)))
-        .normalize();
-
-      const i3 = k * 3;
-      positions[i3 + 0] = dir.x * PLANET_RADIUS * 1.001;
-      positions[i3 + 1] = dir.y * PLANET_RADIUS * 1.001;
-      positions[i3 + 2] = dir.z * PLANET_RADIUS * 1.001;
-
-      if (k === 0) {
-        // close the loop at the end
-        const j3 = segments * 3;
-        positions[j3 + 0] = positions[i3 + 0];
-        positions[j3 + 1] = positions[i3 + 1];
-        positions[j3 + 2] = positions[i3 + 2];
+    function setSDKStatus(ok, text) {
+      if (ok) {
+        sdkStatusEl.innerHTML = '<span class="ok">' + (text || 'nkn-sdk loaded') + '</span>';
+      } else {
+        sdkStatusEl.innerHTML = '<span class="bad">' + (text || 'nkn-sdk not loaded') + '</span>';
       }
     }
 
-    hexGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    hexGeometry.computeBoundingSphere();
-    hexLine.visible = true;
+    function setConnStatus(ok, text) {
+      if (ok) {
+        connStatusEl.innerHTML = '<span class="ok">' + (text || 'connected') + '</span>';
+      } else {
+        connStatusEl.innerHTML = '<span class="bad">' + (text || 'not connected') + '</span>';
+      }
+    }
 
-    metricsHex.textContent = (hexPatch.radius / DEG2RAD).toFixed(1) + '°';
-    triTree.setHexPatch(hexPatch.centerDir, hexPatch.radius);
-  }
+    // Renderer / scene / camera
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    container.appendChild(renderer.domElement);
 
-  function onPointerDown(e) {
-    if (e.button !== 0 || !e.shiftKey) return;
-    const hit = getSphereIntersection(e);
-    if (!hit) return;
-    e.preventDefault();
-    drawingHex = true;
-    controls.enabled = false;
-    hexPatch.centerDir = hit.clone().normalize();
-    hexPatch.radius = 0.0;
-    updateHexVisualization();
-  }
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#020617');
 
-  function onPointerMove(e) {
-    if (!drawingHex) return;
-    const hit = getSphereIntersection(e);
-    if (!hit) return;
-    const dir = hit.clone().normalize();
-    const dot = THREE.MathUtils.clamp(hexPatch.centerDir.dot(dir), -1, 1);
-    let angle = Math.acos(dot);
-    const minAngle = 3 * DEG2RAD;
-    const maxAngle = 60 * DEG2RAD;
-    angle = THREE.MathUtils.clamp(angle, minAngle, maxAngle);
-    hexPatch.radius = angle;
-    updateHexVisualization();
-  }
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      container.clientWidth / container.clientHeight,
+      0.1,
+      50
+    );
+    camera.position.set(0, 0, 3.5);
+    camera.lookAt(0, 0, 0);
 
-  function onPointerUp(e) {
-    if (!drawingHex) return;
-    drawingHex = false;
-    controls.enabled = true;
-  }
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 1.2;
+    controls.maxDistance = 6.0;
+    controls.target.set(0, 0, 0);
 
-  renderer.domElement.addEventListener('pointerdown', onPointerDown);
-  renderer.domElement.addEventListener('pointermove', onPointerMove);
-  window.addEventListener('pointerup', onPointerUp);
+    const hemi = new THREE.HemisphereLight(0x93c5fd, 0x020617, 0.7);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(3, 4, 2);
+    scene.add(dir);
 
-  // ──────────────────────────────────────────────────────────────
-  // Resize & animation loop
-  // ──────────────────────────────────────────────────────────────
+    const elevationClient = new ElevationClient();
+    const triTree = new TriTreeManager(scene, elevationClient, PLANET_RADIUS);
 
-  function onResize() {
-    const w = container.clientWidth;
-    const h = container.clientHeight;
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-  }
-  window.addEventListener('resize', onResize);
+    // Hex patch drawing on sphere
+    const raycaster = new THREE.Raycaster();
+    const mouseNDC = new THREE.Vector2();
+    const hexGeometry = new THREE.BufferGeometry();
+    const hexMaterial = new THREE.LineBasicMaterial({ color: 0x22d3ee });
+    const hexLine = new THREE.LineLoop(hexGeometry, hexMaterial);
+    hexLine.visible = false;
+    scene.add(hexLine);
 
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    triTree.update(camera);
+    const hexPatch = {
+      centerDir: null,
+      radius: 0
+    };
 
-    metricsTiles.textContent = triTree.visibleTileCount.toString();
-    metricsLevel.textContent = triTree.currentMaxLevel.toString();
+    let drawingHex = false;
 
-    renderer.render(scene, camera);
-  }
+    function getSphereIntersection(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      mouseNDC.set(x, y);
 
-  animate();
+      raycaster.setFromCamera(mouseNDC, camera);
+      const origin = raycaster.ray.origin.clone();
+      const dirRay = raycaster.ray.direction.clone().normalize();
+
+      const b = origin.dot(dirRay);
+      const c = origin.lengthSq() - PLANET_RADIUS * PLANET_RADIUS;
+      const disc = b * b - c;
+      if (disc < 0) return null;
+      let t = -b - Math.sqrt(disc);
+      if (t < 0) t = -b + Math.sqrt(disc);
+      if (t < 0) return null;
+      return origin.add(dirRay.multiplyScalar(t));
+    }
+
+    function updateHexVisualization() {
+      if (!hexPatch.centerDir || hexPatch.radius <= 0) {
+        hexLine.visible = false;
+        metricHex.textContent = 'none';
+        triTree.setHexPatch(null, 0);
+        return;
+      }
+
+      const segments = 6;
+      const positions = new Float32Array((segments + 1) * 3);
+      const c = hexPatch.centerDir.clone().normalize();
+      const r = hexPatch.radius;
+
+      let up = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(up.dot(c)) > 0.98) {
+        up = new THREE.Vector3(1, 0, 0);
+      }
+      const east = new THREE.Vector3().crossVectors(up, c).normalize();
+      const north = new THREE.Vector3().crossVectors(c, east).normalize();
+
+      for (let k = 0; k < segments; k++) {
+        const phi = (Math.PI / 3) * k;
+        const tangent = new THREE.Vector3()
+          .copy(east).multiplyScalar(Math.cos(phi))
+          .add(new THREE.Vector3().copy(north).multiplyScalar(Math.sin(phi)));
+
+        const dir = new THREE.Vector3()
+          .copy(c).multiplyScalar(Math.cos(r))
+          .add(tangent.multiplyScalar(Math.sin(r)))
+          .normalize();
+
+        const i3 = k * 3;
+        const scale = PLANET_RADIUS * 1.001;
+        positions[i3 + 0] = dir.x * scale;
+        positions[i3 + 1] = dir.y * scale;
+        positions[i3 + 2] = dir.z * scale;
+
+        if (k === 0) {
+          const j3 = segments * 3;
+          positions[j3 + 0] = positions[i3 + 0];
+          positions[j3 + 1] = positions[i3 + 1];
+          positions[j3 + 2] = positions[i3 + 2];
+        }
+      }
+
+      hexGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      hexGeometry.computeBoundingSphere();
+      hexLine.visible = true;
+
+      metricHex.textContent = (hexPatch.radius / DEG2RAD).toFixed(1) + '°';
+      triTree.setHexPatch(hexPatch.centerDir, hexPatch.radius);
+    }
+
+    function onPointerDown(e) {
+      if (e.button !== 0 || !e.shiftKey) return;
+      const hit = getSphereIntersection(e);
+      if (!hit) return;
+      e.preventDefault();
+      drawingHex = true;
+      controls.enabled = false;
+      hexPatch.centerDir = hit.clone().normalize();
+      hexPatch.radius = 0.0;
+      updateHexVisualization();
+    }
+
+    function onPointerMove(e) {
+      if (!drawingHex) return;
+      const hit = getSphereIntersection(e);
+      if (!hit) return;
+      const dir = hit.clone().normalize();
+      const dot = THREE.MathUtils.clamp(hexPatch.centerDir.dot(dir), -1, 1);
+      let angle = Math.acos(dot);
+      const minAngle = 3 * DEG2RAD;
+      const maxAngle = 60 * DEG2RAD;
+      angle = THREE.MathUtils.clamp(angle, minAngle, maxAngle);
+      hexPatch.radius = angle;
+      updateHexVisualization();
+    }
+
+    function onPointerUp() {
+      if (!drawingHex) return;
+      drawingHex = false;
+      controls.enabled = true;
+    }
+
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    // Resize
+    function onResize() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', onResize);
+
+    // NKN init
+    let mc = null;
+    function initNKN() {
+      if (!window.nkn || !nkn.MultiClient) {
+        setSDKStatus(false, 'nkn-sdk not loaded (check CDN)');
+        return;
+      }
+      setSDKStatus(true, 'nkn-sdk loaded');
+      try {
+        mc = new nkn.MultiClient({ numSubClients: 4, originalClient: false });
+      } catch (e) {
+        setConnStatus(false, 'failed to create MultiClient');
+        console.error('NKN init error', e);
+        return;
+      }
+
+      myAddrEl.textContent = '…';
+      setConnStatus(false, 'connecting…');
+
+      mc.onConnect(() => {
+        myAddrEl.textContent = mc.addr;
+        setConnStatus(true, 'connected');
+        elevationClient.setMultiClient(mc);
+        console.log('✅ NKN connected as', mc.addr);
+      });
+
+      mc.onMessage(({ src, payload }) => handleIncoming(src, payload));
+    }
+
+    initNKN();
+
+    function updateRelayDataset() {
+      // Use DEFAULT_FORWARDER as fallback if input is blank
+      const relay = (relayEl.value.trim() || DEFAULT_FORWARDER);
+      const dataset = datasetEl.value.trim() || 'mapzen';
+      relayEl.value = relay; // normalize / re-fill if blank
+      localStorage.setItem(LS_RELAY, relay);
+      localStorage.setItem(LS_DATASET, dataset);
+      elevationClient.setRelayAndDataset(relay, dataset);
+    }
+
+    // React immediately to user overrides
+    relayEl.addEventListener('input', updateRelayDataset);
+    relayEl.addEventListener('change', updateRelayDataset);
+    datasetEl.addEventListener('input', updateRelayDataset);
+    datasetEl.addEventListener('change', updateRelayDataset);
+    updateRelayDataset();
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      controls.update();
+      triTree.update(camera);
+      elevationClient.updateCamera(camera);
+      elevationClient.tick();
+
+      if (tilesPendingNormals.size) {
+        tilesPendingNormals.forEach(tile => {
+          if (tile.geometry) tile.geometry.computeVertexNormals();
+        });
+        tilesPendingNormals.clear();
+      }
+
+      const stats = elevationClient.getStats();
+      metricTiles.textContent = triTree.visibleTileCount.toString();
+      metricLevel.textContent = triTree.currentMaxLevel.toString();
+      metricBatches.textContent = stats.currentBatches.toString();
+      metricVerts.textContent = stats.totalVertices.toString();
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  });
 </script>
 </body>
 </html>
