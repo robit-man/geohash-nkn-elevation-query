@@ -268,17 +268,34 @@
   // ──────────────────────────────────────────────────────────────
 
   const PLANET_RADIUS = 1.0;
-  const EARTH_RADIUS_M = 6_371_000;
-  const ELEVATION_EXAGGERATION = 10.0; // exaggerate vertical relief
+
+  // Camera near planes (surface near is much tighter)
+  const CAMERA_NEAR_ORBIT = 0.01;
+  const CAMERA_NEAR_SURFACE = 0.001;
+
+  // Surface eye height: ~1.6 units above terrain along local up
+  const SURFACE_EYE_HEIGHT = 1.6;
+
+  // Conceptual "feet" equivalents in world units above surface
+  const ALT_30K_UNITS = 0.4;   // ~30k ft-ish zoom band
+  const ALT_10K_UNITS = 0.15;  // ~10k ft-ish
+  const ALT_AUTO_SURFACE_UNITS = 0.05; // auto switch to surface when closer than this
+
+  const EARTH_RADIUS_M = 6_371_000;       // only used for vertical exaggeration
+  const ELEVATION_EXAGGERATION = 10.0;    // exaggerate vertical relief
   const MAX_TILE_LEVEL = 5;
 
   const DEG2RAD = Math.PI / 180;
   const RAD2DEG = 180 / Math.PI;
 
+  // Default forwarder address (can be overridden via input)
   const DEFAULT_FORWARDER =
     'forwarder.5d7bdb47e1c757508d28f5726469afa1f7c93bd037a1940aa0dab97ab421c833';
 
   const tilesPendingNormals = new Set();
+
+  // For screen-space LOD
+  let viewportHeight = window.innerHeight || 800;
 
   function dirToLatLon(dir) {
     // y = up, z = north, x = east
@@ -363,7 +380,7 @@
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Elevation client (vertex‑first, radial priority from camera)
+  // Elevation client (vertex‑first, priority by camera distance)
   // ──────────────────────────────────────────────────────────────
 
   class ElevationClient {
@@ -736,7 +753,7 @@
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Tritree manager (LOD + hex patch)
+  // Tritree manager (LOD + hex patch + modes)
   // ──────────────────────────────────────────────────────────────
 
   class TriTreeManager {
@@ -755,14 +772,15 @@
         metalness: 0.0,
         roughness: 0.95,
         flatShading: false,
-        side: THREE.DoubleSide, // requested: patches visible from both sides
+        side: THREE.DoubleSide,
       });
 
       this.visibleTileCount = 0;
       this.currentMaxLevel = 0;
-      this.hexPatch = null; // { centerDir, radius }
+      this.hexPatch = null;   // { centerDir, radius }
       this.lodMode = 'orbit'; // 'orbit' or 'zoom'
       this.viewFocusDir = null;
+      this.isSurface = false;
 
       for (const tile of this.rootTiles) {
         tile.ensureMesh(this.group, this.material);
@@ -786,49 +804,74 @@
     }
 
     _desiredLevelForTile(tile, camera) {
-      const camPos = camera.position.clone();
-      const dist = camPos.length();
+      const dist = camera.position.length();
+      const altUnits = dist - this.radius; // pseudo-alt in world units
 
       let baseLevel = 0;
 
       if (this.lodMode === 'orbit') {
-        // Terrain where we "orbit to" — bias around sub-solar point of camera
-        const surfaceDir = camPos.normalize();
-        const dotCam = THREE.MathUtils.clamp(tile.centerDir.dot(surfaceDir), -1, 1);
+        // Orbit LOD: falloff from camera "sub-solar" direction
+        const camDir = camera.position.clone().normalize();
+        const dotCam = THREE.MathUtils.clamp(tile.centerDir.dot(camDir), -1, 1);
         const angleToCam = Math.acos(dotCam);
         const angleDeg = angleToCam * RAD2DEG;
 
-        let levelFromCam;
-        if (angleDeg > 85) levelFromCam = 0;
-        else if (angleDeg > 65) levelFromCam = 1;
-        else if (angleDeg > 45) levelFromCam = 2;
-        else if (angleDeg > 25) levelFromCam = 3;
-        else if (angleDeg > 12) levelFromCam = 4;
-        else levelFromCam = 5;
+        if (angleDeg < 12) baseLevel = 5;
+        else if (angleDeg < 25) baseLevel = 4;
+        else if (angleDeg < 45) baseLevel = 3;
+        else if (angleDeg < 65) baseLevel = 2;
+        else if (angleDeg < 85) baseLevel = 1;
+        else baseLevel = 0;
 
-        baseLevel = levelFromCam;
+        // Distance-based boost: closer → more detail
+        if (altUnits < 0.3) baseLevel += 1;
+        if (altUnits < 0.15) baseLevel += 1;
+        if (altUnits > 1.0) baseLevel -= 1;
+        if (altUnits > 2.0) baseLevel -= 1;
       } else {
-        // Zoom-focus LOD: only aggressively refine the area under the crosshair.
-        const focusDir = this.viewFocusDir || camPos.clone().normalize();
+        // Zoom-focus LOD: screen-space metric for tiles inside FOV
+        const focusDir = this.viewFocusDir || camera.position.clone().normalize();
         const dotF = THREE.MathUtils.clamp(tile.centerDir.dot(focusDir), -1, 1);
         const angleToFocus = Math.acos(dotF);
-        const angleDeg = angleToFocus * RAD2DEG;
 
-        let levelFromFocus;
-        if (angleDeg > 60) levelFromFocus = 0;
-        else if (angleDeg > 40) levelFromFocus = 1;
-        else if (angleDeg > 25) levelFromFocus = 2;
-        else if (angleDeg > 15) levelFromFocus = 3;
-        else if (angleDeg > 8) levelFromFocus = 4;
-        else levelFromFocus = 5;
+        const fovRad = camera.fov * DEG2RAD;
+        const halfFov = fovRad * 0.5;
+        const tileAngle = tile.angularRadius * 2;
 
-        baseLevel = levelFromFocus;
+        // Outside FOV (with margin) → very low detail
+        if (angleToFocus - tile.angularRadius > halfFov * 1.2) {
+          baseLevel = 0;
+        } else {
+          // Approx projected pixel size based on angular span vs FOV
+          const approxPix = (tileAngle / fovRad) * viewportHeight;
+
+          if (approxPix < 8) baseLevel = 0;
+          else if (approxPix < 20) baseLevel = 1;
+          else if (approxPix < 60) baseLevel = 2;
+          else if (approxPix < 150) baseLevel = 3;
+          else if (approxPix < 350) baseLevel = 4;
+          else baseLevel = 5;
+
+          // As we zoom in, push detail further
+          if (altUnits < 0.4) baseLevel += 1;
+          if (altUnits < 0.2) baseLevel += 1;
+        }
       }
 
-      // Distance from planet surface also matters: closer → more detail.
-      if (dist < 2.0) baseLevel += 2;
-      else if (dist < 2.8) baseLevel += 1;
+      // Extra refinement when in surface mode: very high detail near the camera
+      if (this.isSurface) {
+        const camDir = camera.position.clone().normalize();
+        const dotC = THREE.MathUtils.clamp(tile.centerDir.dot(camDir), -1, 1);
+        const angleToCam = Math.acos(dotC);
 
+        if (angleToCam < 5 * DEG2RAD) {
+          baseLevel = Math.max(baseLevel, MAX_TILE_LEVEL);
+        } else if (angleToCam < 12 * DEG2RAD) {
+          baseLevel = Math.max(baseLevel, MAX_TILE_LEVEL - 1);
+        }
+      }
+
+      // Hex patch refinement (selector region)
       let levelFromPatch = 0;
       const patch = this.hexPatch;
       if (patch && patch.centerDir) {
@@ -882,7 +925,9 @@
       }
     }
 
-    update(camera) {
+    update(camera, isSurface = false) {
+      this.isSurface = !!isSurface;
+
       // Compute focus direction from camera for zoom LOD
       const viewDir = new THREE.Vector3();
       camera.getWorldDirection(viewDir);
@@ -912,7 +957,7 @@
 
   const keys = new Set();
 
-  let surfacePos = null;      // ground point on terrain
+  let surfacePos = null;
   const surfaceUp = new THREE.Vector3();
   const surfaceForward = new THREE.Vector3();
   const surfaceRight = new THREE.Vector3();
@@ -920,10 +965,10 @@
   let surfaceYaw = 0;
   let surfacePitch = 0;
   const MAX_PITCH = 80 * DEG2RAD;
-  const EYE_HEIGHT = 0.01 * PLANET_RADIUS; // eye above terrain
-  const SURFACE_SPEED = 0.25; // units per second
+  const SURFACE_SPEED = 0.25;
 
-  let isPointerDraggingSurface = false;
+  let isPointerDraggingSurfaceLook = false;
+  let isPointerDraggingSurfaceMove = false;
   let lastPointerX = 0;
   let lastPointerY = 0;
 
@@ -1007,13 +1052,15 @@
     renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
+    renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#020617');
 
     const camera = new THREE.PerspectiveCamera(
       45,
       container.clientWidth / container.clientHeight,
-      0.1,
+      CAMERA_NEAR_ORBIT,
       50
     );
     camera.position.set(0, 0, 3.5);
@@ -1022,7 +1069,7 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 1.2;
+    controls.minDistance = PLANET_RADIUS; // we auto-switch before we hit the surface
     controls.maxDistance = 6.0;
     controls.target.set(0, 0, 0);
 
@@ -1104,7 +1151,7 @@
       hexLine.visible = true;
 
       metricHex.textContent = (patch.radius / DEG2RAD).toFixed(1) + '°';
-      triTree.setHexPatch(patch.centerDir, patch.radius);
+      triTree.setHexPatch(hexSelection.centerDir, hexSelection.radius);
     }
 
     function setHexSelection(dir) {
@@ -1126,6 +1173,9 @@
       if (cameraMode === 'orbit') return;
       cameraMode = 'orbit';
       controls.enabled = true;
+
+      camera.near = CAMERA_NEAR_ORBIT;
+      camera.updateProjectionMatrix();
 
       camera.position.copy(orbitSavedPosition);
       controls.target.copy(orbitSavedTarget);
@@ -1158,7 +1208,7 @@
       surfaceForward.copy(forward);
       surfaceRight.copy(right);
 
-      const eyeHeight = EYE_HEIGHT;
+      const eyeHeight = SURFACE_EYE_HEIGHT;
       camera.position.copy(surfacePos.clone().add(up.clone().multiplyScalar(eyeHeight)));
       camera.up.copy(up);
       const lookTarget = surfacePos.clone().add(forward);
@@ -1190,13 +1240,63 @@
 
       cameraMode = 'surface';
       controls.enabled = false;
+
+      camera.near = CAMERA_NEAR_SURFACE;
+      camera.updateProjectionMatrix();
+
       updateCameraButtons();
       renderer.domElement.style.cursor = '';
 
       updateSurfaceCamera();
     }
 
-    // Surface movement
+    // Orbit zoom → tilt & auto switch to surface when very close
+    function autoTiltAndAutoSurface(camera, controls) {
+      if (cameraMode !== 'orbit') return;
+
+      const dist = camera.position.length();
+      const altUnits = dist - PLANET_RADIUS;
+
+      // Tilt between ~30k units and ~10k units
+      if (altUnits <= ALT_30K_UNITS) {
+        const up = camera.position.clone().normalize();
+        const down = up.clone().multiplyScalar(-1);
+        let tangent = new THREE.Vector3().crossVectors(up, new THREE.Vector3(0, 1, 0));
+        if (tangent.lengthSq() < 1e-6) tangent.set(1, 0, 0);
+        tangent.normalize();
+
+        let pitchAngle = 0;
+        if (altUnits <= ALT_10K_UNITS) {
+          pitchAngle = Math.PI / 2;
+        } else {
+          const t = (ALT_30K_UNITS - altUnits) / (ALT_30K_UNITS - ALT_10K_UNITS);
+          const clamped = THREE.MathUtils.clamp(t, 0, 1);
+          pitchAngle = clamped * (Math.PI / 2);
+        }
+
+        const lookDir = down.multiplyScalar(Math.cos(pitchAngle))
+          .add(tangent.multiplyScalar(Math.sin(pitchAngle)))
+          .normalize();
+
+        const target = camera.position.clone().add(lookDir);
+        controls.target.copy(target);
+        controls.update();
+      }
+
+      // Auto transition to surface when zoomed very close
+      if (altUnits <= ALT_AUTO_SURFACE_UNITS) {
+        const viewDir = new THREE.Vector3();
+        camera.getWorldDirection(viewDir);
+        const hit = raySphereIntersection(camera.position, viewDir);
+        if (hit) {
+          const dir = hit.clone().normalize();
+          setHexSelection(dir);
+          goToSurfaceAtDirection(dir);
+        }
+      }
+    }
+
+    // Surface movement (keyboard)
     function updateSurfaceMovement(dt) {
       if (cameraMode !== 'surface' || !surfacePos) return;
 
@@ -1222,13 +1322,12 @@
       updateSurfaceCamera();
     }
 
-    // Camera buttons: orbit ↔ surface
+    // Camera mode buttons
     btnCamOrbit.addEventListener('click', () => {
       switchToOrbit();
     });
 
     btnCamSurface.addEventListener('click', () => {
-      // Drop to surface at the current view focus
       const viewDir = new THREE.Vector3();
       camera.getWorldDirection(viewDir);
       const hit = raySphereIntersection(camera.position, viewDir);
@@ -1254,10 +1353,10 @@
     }
 
     function onPointerDown(e) {
-      if (e.button !== 0) return;
+      if (e.button !== 0 && e.button !== 2) return;
 
       if (cameraMode === 'orbit') {
-        if (e.shiftKey) {
+        if (e.button === 0 && e.shiftKey) {
           const hit = getSphereIntersectionFromEvent(e);
           if (hit) {
             e.preventDefault();
@@ -1268,34 +1367,57 @@
         }
       } else if (cameraMode === 'surface') {
         if (!isEditableTarget(e.target)) {
-          isPointerDraggingSurface = true;
           lastPointerX = e.clientX;
           lastPointerY = e.clientY;
-          renderer.domElement.style.cursor = 'grabbing';
+          if (e.button === 2) {
+            isPointerDraggingSurfaceLook = true;  // right-drag = look
+            renderer.domElement.style.cursor = 'grabbing';
+          } else if (e.button === 0) {
+            isPointerDraggingSurfaceMove = true;  // left-drag = move
+            renderer.domElement.style.cursor = 'grabbing';
+          }
         }
       }
     }
 
     function onPointerMove(e) {
-      if (cameraMode === 'surface' && isPointerDraggingSurface) {
+      if (cameraMode === 'surface' && (isPointerDraggingSurfaceLook || isPointerDraggingSurfaceMove)) {
         const dx = e.clientX - lastPointerX;
         const dy = e.clientY - lastPointerY;
         lastPointerX = e.clientX;
         lastPointerY = e.clientY;
 
-        const yawSpeed = 0.0025;
-        const pitchSpeed = 0.0025;
-        surfaceYaw -= dx * yawSpeed;
-        surfacePitch -= dy * pitchSpeed;
-        surfacePitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, surfacePitch));
+        if (isPointerDraggingSurfaceLook) {
+          // Right-drag: look (yaw + pitch)
+          const yawSpeed = 0.0025;
+          const pitchSpeed = 0.0025;
+          surfaceYaw -= dx * yawSpeed;
+          surfacePitch -= dy * pitchSpeed;
+          surfacePitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, surfacePitch));
+          updateSurfaceCamera();
+        } else if (isPointerDraggingSurfaceMove) {
+          // Left-drag: move along surface in drag direction
+          const dragScale = 0.002;
+          const move = new THREE.Vector3()
+            .addScaledVector(surfaceRight, dx * dragScale)
+            .addScaledVector(surfaceForward, -dy * dragScale);
 
-        updateSurfaceCamera();
+          if (move.lengthSq() > 0 && surfacePos) {
+            const newPos = surfacePos.clone().add(move);
+            const newDir = newPos.clone().normalize();
+            const ground = getTerrainPointFromDir(newDir);
+            surfacePos.copy(ground);
+            surfaceUp.copy(surfacePos.clone().normalize());
+            updateSurfaceCamera();
+          }
+        }
       }
     }
 
     function onPointerUp() {
       if (cameraMode === 'surface') {
-        isPointerDraggingSurface = false;
+        isPointerDraggingSurfaceLook = false;
+        isPointerDraggingSurfaceMove = false;
         renderer.domElement.style.cursor = '';
       }
     }
@@ -1323,6 +1445,7 @@
     function onResize() {
       const w = container.clientWidth;
       const h = container.clientHeight;
+      viewportHeight = h;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -1414,11 +1537,12 @@
 
       if (cameraMode === 'orbit') {
         controls.update();
+        autoTiltAndAutoSurface(camera, controls);
       } else {
         updateSurfaceMovement(dt);
       }
 
-      triTree.update(camera);
+      triTree.update(camera, cameraMode === 'surface');
       elevationClient.updateCamera(camera);
       elevationClient.tick();
 
