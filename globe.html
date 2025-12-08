@@ -23,6 +23,7 @@
     :root {
       --bg: #020617;
       --panel: #020617cc;
+      --panel-solid: #020617f2;
       --accent: #22d3ee;
       --accent-soft: #38bdf8;
       --accent-strong: #06b6d4;
@@ -31,9 +32,10 @@
       --ok: #4ade80;
       --bad: #f97373;
       --border: #1f2937;
+      --border-strong: #111827;
     }
-    *{box-sizing:border-box;}
-    html,body{
+    * { box-sizing: border-box; }
+    html, body {
       margin:0;
       padding:0;
       width:100%;
@@ -44,16 +46,17 @@
       background: radial-gradient(circle at top, #0f172a 0, #020617 55%);
       color: var(--text);
     }
-    #app{
+    #app {
       position:fixed;
       inset:0;
       display:flex;
       flex-direction:column;
     }
-    #toolbar{
+
+    /* Top toolbar (minimal: just title + hint) */
+    #toolbar {
       padding:10px 14px;
       display:flex;
-      flex-wrap:wrap;
       align-items:flex-start;
       justify-content:space-between;
       gap:10px;
@@ -64,22 +67,22 @@
         rgba(15,23,42,0));
       z-index:10;
     }
-    #toolbar-left{
+    #toolbar-left {
       display:flex;
       flex-direction:column;
       gap:4px;
     }
-    #title{
+    #title {
       font-size:14px;
       font-weight:600;
       letter-spacing:0.02em;
       white-space:nowrap;
     }
-    #hint{
+    #hint {
       font-size:12px;
       color:var(--muted);
     }
-    .pill{
+    .pill {
       padding:4px 8px;
       border-radius:999px;
       border:1px solid var(--border);
@@ -89,7 +92,7 @@
       align-items:center;
       gap:6px;
     }
-    .pill span.key{
+    .pill span.key {
       padding:1px 6px;
       border-radius:999px;
       border:1px solid var(--border);
@@ -98,111 +101,16 @@
       color:var(--accent-soft);
       font-weight:500;
     }
-    #toolbar-right{
-      display:flex;
-      flex-wrap:wrap;
-      align-items:flex-start;
-      gap:10px;
-      font-size:11px;
-    }
-    .field-group{
-      display:flex;
-      flex-direction:column;
-      gap:4px;
-      min-width:160px;
-    }
-    .field-group label{
-      font-size:11px;
-      color:var(--muted);
-    }
-    .field-group input{
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background:#02061799;
-      color:var(--text);
-      outline:none;
-      font-size:11px;
-      min-width:0;
-    }
-    .field-group input:focus{
-      border-color:var(--accent-soft);
-      box-shadow:0 0 0 1px rgba(56,189,248,0.35);
-    }
-    #myAddr{
-      font-size:11px;
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px dashed var(--border);
-      min-width:140px;
-      white-space:nowrap;
-    }
-    #sdkStatus, #connStatus{
-      font-size:11px;
-    }
-    #sdkStatus .ok, #connStatus .ok{color:var(--ok);}
-    #sdkStatus .bad, #connStatus .bad{color:var(--bad);}
 
-    .button-row{
-      display:flex;
-      flex-wrap:wrap;
-      gap:6px;
-    }
-    .mode-btn{
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background:#02061799;
-      color:var(--muted);
-      font-size:11px;
-      cursor:pointer;
-      white-space:nowrap;
-    }
-    .mode-btn.small{
-      padding:3px 7px;
-      font-size:10px;
-    }
-    .mode-btn.active{
-      border-color:var(--accent-soft);
-      color:var(--accent-soft);
-      background:#0b1120;
-    }
-    .mode-btn:focus-visible{
-      outline:2px solid var(--accent-soft);
-      outline-offset:1px;
-    }
-
-    #three-container{
+    #three-container {
       flex:1;
       position:relative;
     }
-    #three-container canvas{
+    #three-container canvas {
       display:block;
     }
-    #metrics{
-      position:absolute;
-      right:10px;
-      bottom:10px;
-      padding:6px 10px;
-      border-radius:12px;
-      background:var(--panel);
-      border:1px solid #1e293b;
-      font-size:11px;
-      color:var(--muted);
-      pointer-events:none;
-      backdrop-filter:blur(10px);
-      min-width:190px;
-      z-index:15;
-    }
-    #metrics strong{
-      color:var(--accent-soft);
-      font-weight:500;
-    }
-    #metrics .value{
-      color:var(--text);
-    }
 
-    /* Debug UI */
+    /* Debug UI (bottom-left bug) */
     #debug-toggle{
       position:absolute;
       left:10px;
@@ -289,6 +197,229 @@
       background:linear-gradient(90deg, var(--accent-soft), var(--accent-strong));
       transform-origin:left center;
     }
+
+    /* Sidebar toggle (right edge) */
+    #sidebar-toggle {
+      position:absolute;
+      top:50%;
+      right:10px;
+      transform:translateY(-50%);
+      width:30px;
+      height:30px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#020617dd;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:16px;
+      cursor:pointer;
+      color:var(--muted);
+      z-index:25;
+      box-shadow:0 0 0 1px #020617, 0 8px 20px rgba(0,0,0,0.55);
+    }
+    #sidebar-toggle.open {
+      border-color:var(--accent-soft);
+      color:var(--accent-soft);
+      background:#020617;
+    }
+
+    /* Sidebar */
+    #sidebar {
+      position:absolute;
+      top:0;
+      right:0;
+      bottom:0;
+      width:280px;
+      max-width:80%;
+      background:var(--panel-solid);
+      border-left:1px solid var(--border-strong);
+      box-shadow:-12px 0 30px rgba(0,0,0,0.75);
+      transform:translateX(100%);
+      transition:transform 0.22s cubic-bezier(0.24, 0.8, 0.3, 1);
+      z-index:24;
+      display:flex;
+      flex-direction:column;
+      backdrop-filter:blur(14px);
+    }
+    #sidebar.open {
+      transform:translateX(0);
+    }
+    #sidebar-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 10px 8px 12px;
+      border-bottom:1px solid var(--border);
+    }
+    #sidebar-title {
+      font-size:12px;
+      font-weight:600;
+      letter-spacing:0.04em;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+    #sidebar-close {
+      border:none;
+      outline:none;
+      background:transparent;
+      color:var(--muted);
+      cursor:pointer;
+      font-size:18px;
+      line-height:1;
+      padding:0 4px;
+    }
+    #sidebar-tabs {
+      display:flex;
+      padding:6px 6px;
+      gap:4px;
+      border-bottom:1px solid var(--border);
+    }
+    .sidebar-tab {
+      flex:1;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#020617dd;
+      color:var(--muted);
+      font-size:11px;
+      padding:4px 6px;
+      cursor:pointer;
+      text-align:center;
+      white-space:nowrap;
+    }
+    .sidebar-tab.active {
+      border-color:var(--accent-soft);
+      color:var(--accent-soft);
+      background:#0b1120;
+    }
+    #sidebar-pages {
+      flex:1;
+      overflow:auto;
+      padding:8px 10px 10px 10px;
+      font-size:11px;
+    }
+    .sidebar-page {
+      display:none;
+    }
+    .sidebar-page.active {
+      display:block;
+    }
+
+    .sidebar-section {
+      margin-bottom:10px;
+      padding-bottom:8px;
+      border-bottom:1px solid var(--border);
+    }
+    .sidebar-section:last-child {
+      border-bottom:none;
+      margin-bottom:0;
+      padding-bottom:0;
+    }
+    .sidebar-section-title {
+      font-size:11px;
+      font-weight:600;
+      color:var(--accent-soft);
+      margin-bottom:4px;
+      text-transform:uppercase;
+      letter-spacing:0.04em;
+    }
+
+    .field-group {
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+      margin-bottom:6px;
+    }
+    .field-group label {
+      font-size:11px;
+      color:var(--muted);
+    }
+    .field-group input {
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#02061799;
+      color:var(--text);
+      outline:none;
+      font-size:11px;
+      min-width:0;
+    }
+    .field-group input:focus{
+      border-color:var(--accent-soft);
+      box-shadow:0 0 0 1px rgba(56,189,248,0.35);
+    }
+    .field-row-inline {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:6px;
+    }
+    .field-row-inline input {
+      max-width:80px;
+      text-align:right;
+    }
+    .field-note {
+      font-size:10px;
+      color:var(--muted);
+    }
+
+    .metric-list {
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .metric-row {
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .metric-label {
+      color:var(--muted);
+    }
+    .metric-value {
+      color:var(--text);
+      font-variant-numeric:tabular-nums;
+    }
+
+    .pill-small {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      padding:3px 7px;
+      background:#020617aa;
+      font-size:10px;
+      margin-top:4px;
+    }
+    .pill-small span.key {
+      padding:1px 5px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#020617;
+      font-size:9px;
+      color:var(--accent-soft);
+      font-weight:500;
+    }
+
+    .mode-btn-small {
+      padding:3px 7px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#020617dd;
+      color:var(--muted);
+      font-size:10px;
+      cursor:pointer;
+      white-space:nowrap;
+      margin-right:4px;
+      margin-top:2px;
+    }
+    .mode-btn-small.active {
+      border-color:var(--accent-soft);
+      color:var(--accent-soft);
+      background:#0b1120;
+    }
+
   </style>
 </head>
 <body>
@@ -298,52 +429,225 @@
       <div id="title">NKN Tritree Globe · Earth-Scale & Efficient</div>
       <div id="hint">
         <span class="pill">
-          <span class="key">Drag</span> orbit
+          <span class="key">Drag</span> orbit / look
           <span class="key">Wheel</span> zoom
           <span class="key">Shift + Click</span> drop to surface & walk
         </span>
       </div>
     </div>
-    <div id="toolbar-right">
-      <div class="field-group">
-        <label for="relay">Forwarder address</label>
-        <input id="relay" type="text" placeholder="forwarder.… or pubkey" />
-      </div>
-      <div class="field-group">
-        <label for="dataset">Dataset</label>
-        <input id="dataset" type="text" value="mapzen" />
-      </div>
-      <div class="field-group">
-        <label>LOD mode</label>
-        <div class="button-row">
-          <button id="btnLodOrbit" class="mode-btn small active">Orbit</button>
-          <button id="btnLodZoom" class="mode-btn small">Zoom focus</button>
-        </div>
-      </div>
-      <div class="field-group">
-        <label>Camera</label>
-        <div class="button-row">
-          <button id="btnCamOrbit" class="mode-btn small active">Orbit</button>
-          <button id="btnCamSurface" class="mode-btn small">Surface</button>
-        </div>
-      </div>
-      <div class="field-group">
-        <label>My NKN address</label>
-        <div id="myAddr">—</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:2px;min-width:160px;">
-        <div id="sdkStatus">Loading nkn-sdk…</div>
-        <div id="connStatus">Not connected</div>
-      </div>
-    </div>
   </div>
+
   <div id="three-container">
-    <div id="metrics">
-      <div><strong>Tiles</strong> <span class="value" id="metric-tiles">–</span></div>
-      <div><strong>Max level</strong> <span class="value" id="metric-level">–</span></div>
-      <div><strong>Hex selector</strong> <span class="value" id="metric-hex">none</span></div>
-      <div><strong>Elev batches</strong> <span class="value" id="metric-batches">0</span></div>
-      <div><strong>Vertices cached</strong> <span class="value" id="metric-verts">0</span></div>
+    <!-- Sidebar toggle & panel -->
+    <button id="sidebar-toggle" title="Toggle configuration">⚙️</button>
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <div id="sidebar-title">Config & Metrics</div>
+        <button id="sidebar-close" aria-label="Close sidebar">×</button>
+      </div>
+      <div id="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="overview">Overview</button>
+        <button class="sidebar-tab" data-tab="elevation">Elevation / NKN</button>
+        <button class="sidebar-tab" data-tab="lod">LOD & Camera</button>
+      </div>
+      <div id="sidebar-pages">
+        <!-- Overview -->
+        <div class="sidebar-page active" data-page="overview">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Status</div>
+            <div class="field-group">
+              <label>nkn-sdk</label>
+              <div id="sdkStatus">Loading nkn-sdk…</div>
+            </div>
+            <div class="field-group">
+              <label>Connection</label>
+              <div id="connStatus">Not connected</div>
+            </div>
+            <div class="field-group">
+              <label>My NKN address</label>
+              <div id="myAddr" style="font-size:11px;padding:4px 8px;border-radius:999px;border:1px dashed var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                —
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Globe & LOD</div>
+            <div class="metric-list">
+              <div class="metric-row">
+                <span class="metric-label">Tiles</span>
+                <span class="metric-value" id="metric-tiles">–</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Max level</span>
+                <span class="metric-value" id="metric-level">–</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Hex selector</span>
+                <span class="metric-value" id="metric-hex">none</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Lat / Lon</span>
+                <span class="metric-value" id="metric-latlon">–</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Elevation traffic</div>
+            <div class="metric-list">
+              <div class="metric-row">
+                <span class="metric-label">Active batches</span>
+                <span class="metric-value" id="metric-batches">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Vertices cached</span>
+                <span class="metric-value" id="metric-verts">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Requests</span>
+                <span class="metric-value" id="metric-reqs">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Points out</span>
+                <span class="metric-value" id="metric-points-out">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">KB out</span>
+                <span class="metric-value" id="metric-kbout">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Responses</span>
+                <span class="metric-value" id="metric-resps">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Points in</span>
+                <span class="metric-value" id="metric-points-in">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">KB in</span>
+                <span class="metric-value" id="metric-kbin">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">In / Out ratio</span>
+                <span class="metric-value" id="metric-ratio">–</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Elevation / NKN -->
+        <div class="sidebar-page" data-page="elevation">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Forwarder & dataset</div>
+            <div class="field-group">
+              <label for="relay">Forwarder address</label>
+              <input id="relay" type="text" placeholder="forwarder.… or pubkey" />
+            </div>
+            <div class="field-group">
+              <label for="dataset">Dataset</label>
+              <input id="dataset" type="text" value="mapzen" />
+            </div>
+            <div class="field-note">
+              Provide your NKN forwarder endpoint and elevation dataset key.
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Fetch tuning</div>
+            <div class="field-group">
+              <label>Batch size (points)</label>
+              <div class="field-row-inline">
+                <span>Vertices / batch</span>
+                <input id="cfg-batchSize" type="number" min="1" max="500" step="1" value="80" />
+              </div>
+            </div>
+            <div class="field-group">
+              <label>Max concurrent batches</label>
+              <div class="field-row-inline">
+                <span>Concurrency</span>
+                <input id="cfg-maxConcurrent" type="number" min="1" max="8" step="1" value="2" />
+              </div>
+            </div>
+            <div class="field-group">
+              <label>Min interval between batches</label>
+              <div class="field-row-inline">
+                <span>Interval (ms)</span>
+                <input id="cfg-minInterval" type="number" min="50" max="2000" step="50" value="250" />
+              </div>
+            </div>
+            <div class="field-group">
+              <label>Max outbound traffic</label>
+              <div class="field-row-inline">
+                <span>KB / minute (0 = unlimited)</span>
+                <input id="cfg-maxKBPerMin" type="number" min="0" max="65535" step="16" value="512" />
+              </div>
+            </div>
+            <div class="field-note">
+              Fetching prioritizes vertices inside the camera FOV, then fills nearby off-screen vertices
+              so you get a fast coarse pass and then refining passes as you zoom.
+            </div>
+          </div>
+        </div>
+
+        <!-- LOD & Camera -->
+        <div class="sidebar-page" data-page="lod">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">LOD mode</div>
+            <div>
+              <button id="btnLodOrbit" class="mode-btn-small active">Orbit LOD</button>
+              <button id="btnLodZoom" class="mode-btn-small">Zoom focus LOD</button>
+            </div>
+            <div class="pill-small">
+              <span class="key">Orbit</span> falloff from camera-facing point
+              &nbsp;·&nbsp;
+              <span class="key">Zoom</span> FOV-based refinement
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Tile budgets</div>
+            <div class="field-group">
+              <label>Tile budget</label>
+              <div class="field-row-inline">
+                <span>Max tiles</span>
+                <input id="cfg-tileBudget" type="number" min="200" max="8000" step="100" />
+              </div>
+            </div>
+            <div class="field-group">
+              <label>Per-frame split budget</label>
+              <div class="field-row-inline">
+                <span>Splits / frame</span>
+                <input id="cfg-splitBudget" type="number" min="4" max="256" step="4" />
+              </div>
+            </div>
+            <div class="field-group">
+              <label>Per-frame merge budget</label>
+              <div class="field-row-inline">
+                <span>Merges / frame</span>
+                <input id="cfg-mergeBudget" type="number" min="4" max="256" step="4" />
+              </div>
+            </div>
+            <div class="field-note">
+              Higher budgets refine faster but may cost FPS. Tile budget caps total active
+              triangle patches on the globe.
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Camera mode</div>
+            <div>
+              <button id="btnCamOrbit" class="mode-btn-small active">Orbit</button>
+              <button id="btnCamSurface" class="mode-btn-small">Surface</button>
+            </div>
+            <div class="field-note">
+              Orbit mode uses drag-to-orbit and auto-tilt as you zoom.
+              Surface mode puts you 1.6 m above the terrain on a raycast anchor, with drag-to-look
+              relative to the local horizon and W/A/S/D walking along the surface.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Debug toggle + panel -->
@@ -368,18 +672,16 @@
   const PLANET_RADIUS = EARTH_RADIUS_M;
 
   const CAMERA_NEAR_ORBIT = 100;   // 100 m
-  const CAMERA_NEAR_SURFACE = 0.1; // 10 cm, "effectively 0" for surface use
+  const CAMERA_NEAR_SURFACE = 0.1; // 10 cm
 
-  // Surface eye height: 1.6 meters above terrain along local up
-  const SURFACE_EYE_HEIGHT = 1.6;
+  const SURFACE_EYE_HEIGHT = 1.6; // meters above terrain
 
-  // Altitude bands (meters above surface) used for tilting & auto transition
   const ALT_30K_UNITS = 30_000;   // ~30k ft
   const ALT_10K_UNITS = 10_000;   // ~10k ft
-  const ALT_AUTO_SURFACE_UNITS = 8_000; // auto switch to surface when closer than this
+  const ALT_AUTO_SURFACE_UNITS = 8_000; // auto switch when closer than this
 
-  const ELEVATION_EXAGGERATION = 100;  // exaggerate vertical relief
-  const MAX_TILE_LEVEL = 8;
+  const ELEVATION_EXAGGERATION = 10.0;
+  const MAX_TILE_LEVEL = 5;
 
   const DEG2RAD = Math.PI / 180;
   const RAD2DEG = 180 / Math.PI;
@@ -398,6 +700,15 @@
       latDeg: THREE.MathUtils.radToDeg(lat),
       lonDeg: THREE.MathUtils.radToDeg(lon)
     };
+  }
+
+  function worldPosToLatLon(vec) {
+    const r = vec.length();
+    if (!r) return null;
+    const yNorm = THREE.MathUtils.clamp(vec.y / r, -1, 1);
+    const lat = Math.asin(yNorm);
+    const lon = Math.atan2(vec.x, vec.z);
+    return { latDeg: lat * RAD2DEG, lonDeg: lon * RAD2DEG };
   }
 
   function raySphereIntersection(origin, dir, radius = PLANET_RADIUS) {
@@ -452,7 +763,6 @@
 
     const sFrame = perf.sections.frame;
     const frameAvg = sFrame && sFrame.samples ? (sFrame.total / sFrame.samples) : null;
-    const last = sFrame ? sFrame.last : null;
     if (frameAvg) {
       const fps = 1000 / frameAvg;
       fpsEl.textContent = `FPS: ${fps.toFixed(1)} (frame ~${frameAvg.toFixed(1)} ms)`;
@@ -503,11 +813,12 @@
     });
   }
 
-  function sendWithReply(mc, dest, obj, timeoutMs = 25000) {
+  function sendWithReply(mc, dest, obj, timeoutMs = 25000, onBytes) {
     const id = obj.id || uuidv4();
     obj.id = id;
     const encoded = new TextEncoder().encode(JSON.stringify(obj));
     lastPayloadBytes = encoded.length;
+    if (typeof onBytes === 'function') onBytes(lastPayloadBytes, obj);
 
     const p = new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -548,7 +859,7 @@
   }
 
   // ──────────────────────────────────────────────────────────────
-  // Elevation client
+  // Elevation client (FOV-aware, cached, metered)
   // ──────────────────────────────────────────────────────────────
 
   class ElevationClient {
@@ -559,12 +870,27 @@
 
       this.vertexMap = new Map(); // key -> record
       this.cameraPos = new THREE.Vector3();
+      this.cameraDir = new THREE.Vector3(0, 0, -1);
+      this.cameraFovRad = 45 * DEG2RAD;
 
       this.maxConcurrentBatches = 2;
       this.currentBatches = 0;
       this.batchSize = 80;
       this.minIntervalMs = 250;
       this.lastScheduleTime = 0;
+
+      this.maxKBPerMinute = 512; // 0 = unlimited
+      this.windowMs = 60_000;
+      this.sendEvents = []; // {t, bytes}
+
+      this.stats = {
+        requestCount: 0,
+        pointsRequested: 0,
+        bytesOut: 0,
+        responseCount: 0,
+        pointsReceived: 0,
+        bytesIn: 0
+      };
     }
 
     setMultiClient(mc) {
@@ -576,6 +902,52 @@
       this.dataset = (dataset || 'mapzen').trim();
     }
 
+    setConfig({ batchSize, maxConcurrent, minIntervalMs, maxKBPerMinute }) {
+      if (Number.isFinite(batchSize) && batchSize > 0) {
+        this.batchSize = Math.max(1, Math.min(500, Math.floor(batchSize)));
+      }
+      if (Number.isFinite(maxConcurrent) && maxConcurrent > 0) {
+        this.maxConcurrentBatches = Math.max(1, Math.min(8, Math.floor(maxConcurrent)));
+      }
+      if (Number.isFinite(minIntervalMs) && minIntervalMs > 0) {
+        this.minIntervalMs = Math.max(50, Math.min(5000, Math.floor(minIntervalMs)));
+      }
+      if (Number.isFinite(maxKBPerMinute) && maxKBPerMinute >= 0) {
+        this.maxKBPerMinute = Math.floor(maxKBPerMinute);
+      }
+    }
+
+    _recordOutbound(bytes, count) {
+      if (!Number.isFinite(bytes)) return;
+      const now = performance.now();
+      this.sendEvents.push({ t: now, bytes });
+      const cutoff = now - this.windowMs;
+      this.sendEvents = this.sendEvents.filter(ev => ev.t >= cutoff);
+
+      this.stats.requestCount++;
+      this.stats.pointsRequested += (count || 0);
+      this.stats.bytesOut += bytes;
+    }
+
+    _recordInbound(bytes, count) {
+      if (!Number.isFinite(bytes)) return;
+      this.stats.responseCount++;
+      this.stats.pointsReceived += (count || 0);
+      this.stats.bytesIn += bytes;
+    }
+
+    _canSendBatch() {
+      const capKB = this.maxKBPerMinute;
+      if (!capKB || capKB <= 0) return true;
+      const now = performance.now();
+      const cutoff = now - this.windowMs;
+      let totalBytes = 0;
+      this.sendEvents = this.sendEvents.filter(ev => ev.t >= cutoff);
+      for (const ev of this.sendEvents) totalBytes += ev.bytes;
+      const totalKB = totalBytes / 1024;
+      return totalKB < capKB;
+    }
+
     registerVertex(latDeg, lonDeg, dir, tile, index) {
       const key = `${latDeg.toFixed(6)},${lonDeg.toFixed(6)}`;
       let rec = this.vertexMap.get(key);
@@ -584,7 +956,7 @@
           key,
           lat: latDeg,
           lng: lonDeg,
-          dir,
+          dir: dir.clone(),
           clients: [],
           status: 'new',
           distance: Infinity,
@@ -593,35 +965,63 @@
         this.vertexMap.set(key, rec);
       }
       rec.clients.push({ tile, index });
+
+      // Cache hit: already have height, apply immediately
+      if (rec.status === 'done') {
+        tile.updateVertex(index, rec.height);
+      }
     }
 
     updateCamera(camera) {
       this.cameraPos.copy(camera.position);
+      camera.getWorldDirection(this.cameraDir);
+      this.cameraFovRad = camera.fov * DEG2RAD;
     }
 
     tick() {
       if (!this.mc || !this.relayDest) return;
       if (this.currentBatches >= this.maxConcurrentBatches) return;
+      if (!this._canSendBatch()) return;
 
       const now = performance.now();
       if (now - this.lastScheduleTime < this.minIntervalMs) return;
       this.lastScheduleTime = now;
 
       const cameraPos = this.cameraPos;
-      const candidates = [];
+      const viewDir = this.cameraDir;
+      const maxAngle = this.cameraFovRad * 0.75;
+
+      const inView = [];
+      const offView = [];
 
       for (const rec of this.vertexMap.values()) {
-        if (rec.status === 'new') {
-          const worldPos = rec.dir.clone().multiplyScalar(PLANET_RADIUS);
-          rec.distance = worldPos.distanceTo(cameraPos);
-          candidates.push(rec);
-        }
+        if (rec.status !== 'new') continue;
+
+        const worldPos = rec.dir.clone().multiplyScalar(PLANET_RADIUS);
+        rec.distance = worldPos.distanceTo(cameraPos);
+
+        const dot = THREE.MathUtils.clamp(rec.dir.dot(viewDir), -1, 1);
+        const angle = Math.acos(dot);
+
+        if (angle < maxAngle) inView.push(rec);
+        else offView.push(rec);
       }
 
-      if (!candidates.length) return;
+      if (!inView.length && !offView.length) return;
 
-      candidates.sort((a, b) => a.distance - b.distance);
-      const batch = candidates.slice(0, this.batchSize);
+      inView.sort((a, b) => a.distance - b.distance);
+      offView.sort((a, b) => a.distance - b.distance);
+
+      const batch = [];
+      const totalBudget = this.batchSize;
+      const inViewBudget = Math.floor(totalBudget * 0.7);
+
+      batch.push(...inView.slice(0, inViewBudget));
+      if (batch.length < totalBudget) {
+        batch.push(...offView.slice(0, totalBudget - batch.length));
+      }
+      if (!batch.length) return;
+
       for (const rec of batch) {
         rec.status = 'pending';
       }
@@ -640,64 +1040,70 @@
       const thisBatch = batch;
       this.currentBatches++;
 
-      sendWithReply(this.mc, this.relayDest, payload, 45000)
-        .then(resp => {
-          let json = null;
-          try {
-            if (resp.body_b64) {
-              const decoded = atob(resp.body_b64);
-              json = JSON.parse(decoded);
-            } else if (resp.body) {
-              json = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;
-            }
-          } catch (e) {
-            console.error('[elev] bad JSON', e);
+      sendWithReply(this.mc, this.relayDest, payload, 45000,
+        (bytesOut) => this._recordOutbound(bytesOut, locations.length)
+      ).then(resp => {
+        let json = null;
+        let bytesIn = 0;
+        try {
+          if (resp.body_b64) {
+            bytesIn = resp.body_b64.length * 0.75; // approx
+            const decoded = atob(resp.body_b64);
+            json = JSON.parse(decoded);
+          } else if (resp.body) {
+            const bodyStr = (typeof resp.body === 'string') ? resp.body : JSON.stringify(resp.body);
+            bytesIn = bodyStr.length;
+            json = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body;
           }
+        } catch (e) {
+          console.error('[elev] bad JSON', e);
+        }
 
-          if (!json || !Array.isArray(json.results)) {
-            console.warn('[elev] unexpected response format', json);
-            for (const rec of thisBatch) {
-              if (rec.status === 'pending') rec.status = 'error';
-            }
-            return;
-          }
-
-          for (const r of json.results) {
-            if (!r.location) continue;
-            const key = `${(+r.location.lat).toFixed(6)},${(+r.location.lng).toFixed(6)}`;
-            const rec = this.vertexMap.get(key);
-            if (!rec) continue;
-
-            const elev = Number.isFinite(r.elevation) ? Number(r.elevation) : 0;
-            rec.height = elev;
-            rec.status = 'done';
-
-            for (const ref of rec.clients) {
-              ref.tile.updateVertex(ref.index, elev);
-            }
-          }
-
-          for (const rec of thisBatch) {
-            if (rec.status === 'pending') {
-              rec.status = 'error';
-            }
-          }
-        })
-        .catch(err => {
-          console.error('[elev] batch failed', err);
+        if (!json || !Array.isArray(json.results)) {
+          console.warn('[elev] unexpected response format', json);
           for (const rec of thisBatch) {
             if (rec.status === 'pending') rec.status = 'error';
           }
-        })
-        .finally(() => {
-          this.currentBatches--;
-        });
+          return;
+        }
+
+        this._recordInbound(bytesIn, json.results.length || 0);
+
+        for (const r of json.results) {
+          if (!r.location) continue;
+          const key = `${(+r.location.lat).toFixed(6)},${(+r.location.lng).toFixed(6)}`;
+          const rec = this.vertexMap.get(key);
+          if (!rec) continue;
+
+          const elev = Number.isFinite(r.elevation) ? Number(r.elevation) : 0;
+          rec.height = elev;
+          rec.status = 'done';
+
+          for (const ref of rec.clients) {
+            ref.tile.updateVertex(ref.index, elev);
+          }
+        }
+
+        for (const rec of thisBatch) {
+          if (rec.status === 'pending') rec.status = 'error';
+        }
+      })
+      .catch(err => {
+        console.error('[elev] batch failed', err);
+        for (const rec of thisBatch) {
+          if (rec.status === 'pending') rec.status = 'error';
+        }
+      })
+      .finally(() => {
+        this.currentBatches--;
+      });
     }
 
     getStats() {
       return {
         totalVertices: this.vertexMap.size,
-        currentBatches: this.currentBatches
+        currentBatches: this.currentBatches,
+        ...this.stats
       };
     }
   }
@@ -756,7 +1162,6 @@
     buildGeometry() {
       if (this.geometry) return this.geometry;
 
-      // Base resolution kept modest; grows with level, capped
       const baseRes = 3;
       const resPerLevel = 2;
       const res = Math.min(baseRes + this.level * resPerLevel, 13);
@@ -993,6 +1398,18 @@
       this.lodMode = (mode === 'zoom') ? 'zoom' : 'orbit';
     }
 
+    setBudgets({ tileBudget, splitBudget, mergeBudget }) {
+      if (Number.isFinite(tileBudget) && tileBudget > 0) {
+        this.tileBudget = Math.max(200, Math.min(8000, Math.floor(tileBudget)));
+      }
+      if (Number.isFinite(splitBudget) && splitBudget > 0) {
+        this.splitBudget = Math.max(4, Math.min(256, Math.floor(splitBudget)));
+      }
+      if (Number.isFinite(mergeBudget) && mergeBudget > 0) {
+        this.mergeBudget = Math.max(4, Math.min(256, Math.floor(mergeBudget)));
+      }
+    }
+
     _desiredLevelForTile(tile, camera) {
       const dist = camera.position.length();
       const altUnits = dist - this.radius; // meters above surface
@@ -1000,7 +1417,6 @@
       let baseLevel = 0;
 
       if (this.lodMode === 'orbit') {
-        // Orbit LOD: falloff from camera-facing point
         const camDir = camera.position.clone().normalize();
         const dotCam = THREE.MathUtils.clamp(tile.centerDir.dot(camDir), -1, 1);
         const angleToCam = Math.acos(dotCam);
@@ -1013,14 +1429,12 @@
         else if (angleDeg < 85) baseLevel = 1;
         else baseLevel = 0;
 
-        // Distance-based tweak in meters
-        if (altUnits < 150_000) baseLevel += 1;   // < 150 km
-        if (altUnits < 50_000)  baseLevel += 1;   // < 50 km
-        if (altUnits > 1_000_000) baseLevel -= 1; // > 1,000 km
-        if (altUnits > 3_000_000) baseLevel -= 1; // > 3,000 km
+        if (altUnits < 150_000) baseLevel += 1;
+        if (altUnits < 50_000)  baseLevel += 1;
+        if (altUnits > 1_000_000) baseLevel -= 1;
+        if (altUnits > 3_000_000) baseLevel -= 1;
 
       } else {
-        // Zoom-focus LOD: screen-space size inside FOV
         const focusDir = this.viewFocusDir || camera.position.clone().normalize();
         const dotF = THREE.MathUtils.clamp(tile.centerDir.dot(focusDir), -1, 1);
         const angleToFocus = Math.acos(dotF);
@@ -1041,13 +1455,11 @@
           else if (approxPix < 260) baseLevel = 4;
           else baseLevel = 5;
 
-          // Push detail as we zoom in (meters)
-          if (altUnits < 200_000) baseLevel += 1;  // < 200 km
-          if (altUnits < 60_000)  baseLevel += 1;  // < 60 km
+          if (altUnits < 200_000) baseLevel += 1;
+          if (altUnits < 60_000)  baseLevel += 1;
         }
       }
 
-      // Extra refinement in surface mode around active camera position
       if (this.isSurface) {
         const camDir = camera.position.clone().normalize();
         const dotC = THREE.MathUtils.clamp(tile.centerDir.dot(camDir), -1, 1);
@@ -1060,7 +1472,6 @@
         }
       }
 
-      // Hex patch refinement
       let levelFromPatch = 0;
       const patch = this.hexPatch;
       if (patch && patch.centerDir) {
@@ -1120,7 +1531,6 @@
         visit(root);
       }
 
-      // Merge deepest / least-needed tiles first
       if (tilesToMerge.length) {
         tilesToMerge.sort((a, b) => b.level - a.level);
         let mergesDone = 0;
@@ -1133,7 +1543,6 @@
         }
       }
 
-      // Split high-priority leaves within tile budget
       if (tilesToSplit.length && this.tileCount < this.tileBudget) {
         tilesToSplit.sort((a, b) => b.priority - a.priority);
         let splitsDone = 0;
@@ -1174,10 +1583,11 @@
   let surfaceYaw = 0;
   let surfacePitch = 0;
   const MAX_PITCH = 80 * DEG2RAD;
-  const SURFACE_SPEED = 3.0; // m/s walking speed along the surface
+
+  const SURFACE_WALK_SPEED = 1.4;  // m/s
+  const SURFACE_SPRINT_MULT = 3.0; // sprint factor
 
   let isPointerDraggingSurfaceLook = false;
-  let isPointerDraggingSurfaceMove = false;
   let lastPointerX = 0;
   let lastPointerY = 0;
 
@@ -1194,11 +1604,12 @@
   }
 
   function getTerrainPointFromDir(dir) {
+    // Raycast from planet center outward along direction to hit the current terrain
     if (!triTree || !triTree.group) {
       return dir.clone().normalize().multiplyScalar(PLANET_RADIUS);
     }
-    const origin = dir.clone().normalize().multiplyScalar(PLANET_RADIUS * 2.0);
-    const rayDir = dir.clone().normalize().multiplyScalar(-1);
+    const origin = new THREE.Vector3(0, 0, 0);
+    const rayDir = dir.clone().normalize();
     terrainRaycaster.set(origin, rayDir);
     const hits = terrainRaycaster.intersectObject(triTree.group, true);
     if (hits.length > 0) {
@@ -1218,6 +1629,15 @@
     const metricHex = document.getElementById('metric-hex');
     const metricBatches = document.getElementById('metric-batches');
     const metricVerts = document.getElementById('metric-verts');
+    const metricLatLon = document.getElementById('metric-latlon');
+
+    const metricReqs = document.getElementById('metric-reqs');
+    const metricResps = document.getElementById('metric-resps');
+    const metricKBOut = document.getElementById('metric-kbout');
+    const metricKBIn = document.getElementById('metric-kbin');
+    const metricPtsOut = document.getElementById('metric-points-out');
+    const metricPtsIn = document.getElementById('metric-points-in');
+    const metricRatio = document.getElementById('metric-ratio');
 
     const relayEl = document.getElementById('relay');
     const datasetEl = document.getElementById('dataset');
@@ -1233,6 +1653,21 @@
     const debugToggle = document.getElementById('debug-toggle');
     const debugPanel = document.getElementById('debug-panel');
 
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarClose = document.getElementById('sidebar-close');
+    const sidebarTabs = Array.from(document.querySelectorAll('.sidebar-tab'));
+    const sidebarPages = Array.from(document.querySelectorAll('.sidebar-page'));
+
+    const cfgBatchSize = document.getElementById('cfg-batchSize');
+    const cfgMaxConcurrent = document.getElementById('cfg-maxConcurrent');
+    const cfgMinInterval = document.getElementById('cfg-minInterval');
+    const cfgMaxKBPerMin = document.getElementById('cfg-maxKBPerMin');
+
+    const cfgTileBudget = document.getElementById('cfg-tileBudget');
+    const cfgSplitBudget = document.getElementById('cfg-splitBudget');
+    const cfgMergeBudget = document.getElementById('cfg-mergeBudget');
+
     const LS_RELAY = 'nkn.globe.relay';
     const LS_DATASET = 'nkn.globe.dataset';
 
@@ -1246,7 +1681,6 @@
         sdkStatusEl.innerHTML = '<span class="bad">' + (text || 'nkn-sdk not loaded') + '</span>';
       }
     }
-
     function setConnStatus(ok, text) {
       if (ok) {
         connStatusEl.innerHTML = '<span class="ok">' + (text || 'connected') + '</span>';
@@ -1254,6 +1688,31 @@
         connStatusEl.innerHTML = '<span class="bad">' + (text || 'not connected') + '</span>';
       }
     }
+
+    // Sidebar behavior
+    function openSidebar() {
+      sidebar.classList.add('open');
+      sidebarToggle.classList.add('open');
+    }
+    function closeSidebar() {
+      sidebar.classList.remove('open');
+      sidebarToggle.classList.remove('open');
+    }
+    sidebarToggle.addEventListener('click', () => {
+      if (sidebar.classList.contains('open')) closeSidebar();
+      else openSidebar();
+    });
+    sidebarClose.addEventListener('click', closeSidebar);
+
+    sidebarTabs.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        sidebarTabs.forEach(b => b.classList.toggle('active', b === btn));
+        sidebarPages.forEach(page => {
+          page.classList.toggle('active', page.dataset.page === tab);
+        });
+      });
+    });
 
     // Renderer / scene / camera
     const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
@@ -1282,14 +1741,14 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = PLANET_RADIUS * 1.001; // just above the surface
+    controls.minDistance = PLANET_RADIUS * 1.001;
     controls.maxDistance = PLANET_RADIUS * 8.0;
     controls.target.set(0, 0, 0);
 
     orbitSavedPosition.copy(camera.position);
     orbitSavedTarget.copy(controls.target);
 
-    // Lighting: ambient + sky + sun + cool fill, tuned for an Earth-scale scene
+    // Lighting rig
     const ambient = new THREE.AmbientLight(0x404040, 0.6);
     scene.add(ambient);
 
@@ -1311,7 +1770,7 @@
     triTree = new TriTreeManager(scene, elevationClient, PLANET_RADIUS);
 
     // ────────────────────────────────────────────────────────
-    // Small hex selector (repurposed)
+    // Hex selector
     // ────────────────────────────────────────────────────────
 
     const hexGeometry = new THREE.BufferGeometry();
@@ -1387,6 +1846,7 @@
 
     // ────────────────────────────────────────────────────────
     // Orbit ↔ Surface camera switching & orientation
+    // (inspired by your camera.js surface logic)
     // ────────────────────────────────────────────────────────
 
     function updateCameraButtons() {
@@ -1413,6 +1873,7 @@
     function updateSurfaceCamera() {
       if (cameraMode !== 'surface' || !surfacePos) return;
 
+      // Snap anchor to terrain along the radial direction
       const baseDir = surfacePos.clone().normalize();
       const ground = getTerrainPointFromDir(baseDir);
       surfacePos.copy(ground);
@@ -1421,14 +1882,17 @@
       const up = surfaceUp.clone().normalize();
       let forward = surfaceBaseForward.clone();
 
+      // Rebuild tangent frame
       forward.sub(up.clone().multiplyScalar(forward.dot(up))).normalize();
       let right = new THREE.Vector3().crossVectors(forward, up).normalize();
       forward = new THREE.Vector3().crossVectors(up, right).normalize();
 
+      // Apply yaw around up
       const yawQuat = new THREE.Quaternion().setFromAxisAngle(up, surfaceYaw);
       forward.applyQuaternion(yawQuat);
       right.crossVectors(forward, up).normalize();
 
+      // Apply pitch around local right
       const pitchQuat = new THREE.Quaternion().setFromAxisAngle(right, surfacePitch);
       forward.applyQuaternion(pitchQuat);
       forward.normalize();
@@ -1437,6 +1901,7 @@
       surfaceForward.copy(forward);
       surfaceRight.copy(right);
 
+      // Place camera at eye height above terrain
       const eyeHeight = SURFACE_EYE_HEIGHT;
       camera.position.copy(surfacePos.clone().add(up.clone().multiplyScalar(eyeHeight)));
 
@@ -1445,22 +1910,29 @@
       camera.lookAt(lookTarget);
     }
 
-    function goToSurfaceAtDirection(dir) {
-      const ground = getTerrainPointFromDir(dir);
+    function goToSurfaceAtDirection(dir, fromCamera) {
+      const radialDir = dir.clone().normalize();
+      const ground = getTerrainPointFromDir(radialDir);
       const up = ground.clone().normalize();
 
+      // Save orbit state so we can go back cleanly
       orbitSavedPosition.copy(camera.position);
       orbitSavedTarget.copy(controls.target);
 
       surfacePos = ground.clone();
       surfaceUp.copy(up);
 
-      const worldNorth = new THREE.Vector3(0, 0, 1);
-      let baseFwd = worldNorth.clone().sub(up.clone().multiplyScalar(worldNorth.dot(up)));
-      if (baseFwd.lengthSq() < 1e-6) {
-        baseFwd.set(1, 0, 0);
+      // Base forward from orbit camera view so the transition is continuous
+      let baseFwd;
+      if (fromCamera) {
+        const camFwd = new THREE.Vector3();
+        fromCamera.getWorldDirection(camFwd);
+        baseFwd = camFwd;
+      } else {
+        baseFwd = new THREE.Vector3(0, 0, 1);
       }
-      baseFwd.normalize();
+      baseFwd.sub(up.clone().multiplyScalar(baseFwd.dot(up))).normalize();
+      if (baseFwd.lengthSq() < 1e-6) baseFwd.set(1, 0, 0);
       surfaceBaseForward.copy(baseFwd);
 
       surfaceYaw = 0;
@@ -1509,6 +1981,7 @@
         controls.update();
       }
 
+      // Smooth threshold for auto surface drop
       if (altUnits <= ALT_AUTO_SURFACE_UNITS) {
         const viewDir = new THREE.Vector3();
         camera.getWorldDirection(viewDir);
@@ -1516,7 +1989,7 @@
         if (hit) {
           const dir = hit.clone().normalize();
           setHexSelection(dir);
-          goToSurfaceAtDirection(dir);
+          goToSurfaceAtDirection(dir, camera);
         }
       }
     }
@@ -1536,9 +2009,9 @@
       const tangentDir = move.sub(up.clone().multiplyScalar(move.dot(up))).normalize();
 
       const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
-      const speed = SURFACE_SPEED * (sprint ? 2.0 : 1.0);
-      const arcLen = speed * dt;              // meters this frame
-      const theta = arcLen / PLANET_RADIUS;   // rotation in radians
+      const speed = SURFACE_WALK_SPEED * (sprint ? SURFACE_SPRINT_MULT : 1.0);
+      const arcLen = speed * dt;
+      const theta = arcLen / PLANET_RADIUS;
 
       const axis = new THREE.Vector3().crossVectors(tangentDir, up);
       if (axis.lengthSq() < 1e-12) return;
@@ -1556,7 +2029,7 @@
       updateSurfaceCamera();
     }
 
-    // Camera buttons
+    // Camera buttons in sidebar
     btnCamOrbit.addEventListener('click', () => {
       switchToOrbit();
     });
@@ -1568,7 +2041,7 @@
       if (hit) {
         const dir = hit.clone().normalize();
         setHexSelection(dir);
-        goToSurfaceAtDirection(dir);
+        goToSurfaceAtDirection(dir, camera);
       }
     });
 
@@ -1596,73 +2069,38 @@
             e.preventDefault();
             const dir = hit.clone().normalize();
             setHexSelection(dir);
-            goToSurfaceAtDirection(dir);
+            goToSurfaceAtDirection(dir, camera);
           }
         }
       } else if (cameraMode === 'surface') {
-        if (!isEditableTarget(e.target)) {
+        if (!isEditableTarget(e.target) && e.button === 0) {
           lastPointerX = e.clientX;
           lastPointerY = e.clientY;
-          if (e.button === 2) {
-            isPointerDraggingSurfaceLook = true;
-            renderer.domElement.style.cursor = 'grabbing';
-          } else if (e.button === 0) {
-            isPointerDraggingSurfaceMove = true;
-            renderer.domElement.style.cursor = 'grabbing';
-          }
+          isPointerDraggingSurfaceLook = true;
+          renderer.domElement.style.cursor = 'grabbing';
         }
       }
     }
 
     function onPointerMove(e) {
-      if (cameraMode === 'surface' && (isPointerDraggingSurfaceLook || isPointerDraggingSurfaceMove)) {
+      if (cameraMode === 'surface' && isPointerDraggingSurfaceLook) {
         const dx = e.clientX - lastPointerX;
         const dy = e.clientY - lastPointerY;
         lastPointerX = e.clientX;
         lastPointerY = e.clientY;
 
-        if (isPointerDraggingSurfaceLook) {
-          const yawSpeed = 0.0025;
-          const pitchSpeed = 0.0025;
-          surfaceYaw -= dx * yawSpeed;
-          surfacePitch -= dy * pitchSpeed;
-          surfacePitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, surfacePitch));
-          updateSurfaceCamera();
-        } else if (isPointerDraggingSurfaceMove) {
-          const dragScale = 0.002;
-          const moveDir = new THREE.Vector3()
-            .addScaledVector(surfaceRight, dx * dragScale)
-            .addScaledVector(surfaceForward, -dy * dragScale);
-
-          if (moveDir.lengthSq() > 0 && surfacePos) {
-            const up = surfaceUp.clone().normalize();
-            const tangentDir = moveDir.sub(up.clone().multiplyScalar(moveDir.dot(up))).normalize();
-
-            const arcLen = SURFACE_SPEED * 0.5 * (Math.sqrt(dx*dx + dy*dy) * 0.016);
-            const theta = arcLen / PLANET_RADIUS;
-            const axis = new THREE.Vector3().crossVectors(tangentDir, up);
-            if (axis.lengthSq() > 1e-12) {
-              axis.normalize();
-              surfacePos.applyAxisAngle(axis, theta);
-              const newDir = surfacePos.clone().normalize();
-              const ground = getTerrainPointFromDir(newDir);
-              surfacePos.copy(ground);
-              surfaceUp.copy(surfacePos.clone().normalize());
-
-              surfaceBaseForward.applyAxisAngle(axis, theta);
-              surfaceBaseForward.sub(surfaceUp.clone().multiplyScalar(surfaceBaseForward.dot(surfaceUp))).normalize();
-
-              updateSurfaceCamera();
-            }
-          }
-        }
+        const yawSpeed = 0.0025;
+        const pitchSpeed = 0.0025;
+        surfaceYaw -= dx * yawSpeed;
+        surfacePitch -= dy * pitchSpeed;
+        surfacePitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, surfacePitch));
+        updateSurfaceCamera();
       }
     }
 
     function onPointerUp() {
       if (cameraMode === 'surface') {
         isPointerDraggingSurfaceLook = false;
-        isPointerDraggingSurfaceMove = false;
         renderer.domElement.style.cursor = '';
       }
     }
@@ -1674,6 +2112,10 @@
     window.addEventListener('keydown', (e) => {
       if (isEditableTarget(e.target)) return;
       keys.add(e.code);
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space',
+           'KeyW','KeyA','KeyS','KeyD'].includes(e.code)) {
+        e.preventDefault();
+      }
       if (e.code === 'Escape' && cameraMode === 'surface') {
         switchToOrbit();
       }
@@ -1747,12 +2189,30 @@
     datasetEl.addEventListener('change', updateRelayDataset);
     updateRelayDataset();
 
+    // Elevation config inputs
+    function applyElevConfigFromUI() {
+      const batchSize = parseInt(cfgBatchSize.value, 10);
+      const maxConcurrent = parseInt(cfgMaxConcurrent.value, 10);
+      const minInterval = parseInt(cfgMinInterval.value, 10);
+      const maxKB = parseInt(cfgMaxKBPerMin.value, 10);
+      elevationClient.setConfig({
+        batchSize,
+        maxConcurrent,
+        minIntervalMs: minInterval,
+        maxKBPerMinute: maxKB
+      });
+    }
+    cfgBatchSize.addEventListener('change', applyElevConfigFromUI);
+    cfgMaxConcurrent.addEventListener('change', applyElevConfigFromUI);
+    cfgMinInterval.addEventListener('change', applyElevConfigFromUI);
+    cfgMaxKBPerMin.addEventListener('change', applyElevConfigFromUI);
+    applyElevConfigFromUI();
+
     // LOD mode toggle
     function updateLodButtons() {
       btnLodOrbit.classList.toggle('active', lodMode === 'orbit');
       btnLodZoom.classList.toggle('active', lodMode === 'zoom');
     }
-
     btnLodOrbit.addEventListener('click', () => {
       lodMode = 'orbit';
       triTree.setLODMode('orbit');
@@ -1763,9 +2223,22 @@
       triTree.setLODMode('zoom');
       updateLodButtons();
     });
-
     updateLodButtons();
     updateCameraButtons();
+
+    // LOD budget config
+    cfgTileBudget.value = triTree.tileBudget;
+    cfgSplitBudget.value = triTree.splitBudget;
+    cfgMergeBudget.value = triTree.mergeBudget;
+    function applyLodBudgetsFromUI() {
+      const tileBudget = parseInt(cfgTileBudget.value, 10);
+      const splitBudget = parseInt(cfgSplitBudget.value, 10);
+      const mergeBudget = parseInt(cfgMergeBudget.value, 10);
+      triTree.setBudgets({ tileBudget, splitBudget, mergeBudget });
+    }
+    cfgTileBudget.addEventListener('change', applyLodBudgetsFromUI);
+    cfgSplitBudget.addEventListener('change', applyLodBudgetsFromUI);
+    cfgMergeBudget.addEventListener('change', applyLodBudgetsFromUI);
 
     // Debug toggle
     debugToggle.addEventListener('click', () => {
@@ -1849,6 +2322,39 @@
       metricLevel.textContent = triTree.currentMaxLevel.toString();
       metricBatches.textContent = stats.currentBatches.toString();
       metricVerts.textContent = stats.totalVertices.toString();
+
+      metricReqs.textContent = stats.requestCount.toString();
+      metricResps.textContent = stats.responseCount.toString();
+      metricPtsOut.textContent = stats.pointsRequested.toString();
+      metricPtsIn.textContent = stats.pointsReceived.toString();
+      metricKBOut.textContent = (stats.bytesOut / 1024).toFixed(1);
+      metricKBIn.textContent = (stats.bytesIn / 1024).toFixed(1);
+      if (stats.bytesOut > 0) {
+        const ratio = stats.bytesIn / stats.bytesOut;
+        metricRatio.textContent = ratio.toFixed(2);
+      } else {
+        metricRatio.textContent = '–';
+      }
+
+      // Track and display current lat/lon (surface anchor or orbit focus)
+      let latlonStr = '–';
+      if (cameraMode === 'surface' && surfacePos) {
+        const ll = worldPosToLatLon(surfacePos);
+        if (ll) {
+          latlonStr = `${ll.latDeg.toFixed(4)}°, ${ll.lonDeg.toFixed(4)}°`;
+        }
+      } else {
+        const vDir = new THREE.Vector3();
+        camera.getWorldDirection(vDir);
+        const hit = raySphereIntersection(camera.position, vDir);
+        if (hit) {
+          const ll = worldPosToLatLon(hit);
+          if (ll) {
+            latlonStr = `${ll.latDeg.toFixed(4)}°, ${ll.lonDeg.toFixed(4)}°`;
+          }
+        }
+      }
+      metricLatLon.textContent = latlonStr;
     }
 
     animate();
