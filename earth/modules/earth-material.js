@@ -55,90 +55,75 @@ export function createEarthMaterial(textures, sunLight, options = {}) {
     roughnessHigh: { value: roughnessHigh }
   };
 
-  const vertexShader = `
-    varying vec2 vUv;
-    varying vec3 vNormal;
-    varying vec3 vPosition;
-    varying vec3 vWorldPosition;
+const vertexShader = `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
 
-    void main() {
-      vUv = uv;
-      vNormal = normalize(normalMatrix * normal);
-      vPosition = position;
-      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-      vWorldPosition = worldPosition.xyz;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `;
+  varying vec2 vUv;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
 
-  const fragmentShader = `
-    uniform sampler2D dayTexture;
-    uniform sampler2D nightTexture;
-    uniform sampler2D bumpRoughnessCloudsTexture;
-    uniform sampler2D imageryTexture;
-    uniform float useImagery;
-    uniform vec3 sunDirection;
-    uniform vec3 atmosphereDayColor;
-    uniform vec3 atmosphereTwilightColor;
-    uniform float roughnessLow;
-    uniform float roughnessHigh;
+  void main() {
+    vUv = uv;
 
-    varying vec2 vUv;
-    varying vec3 vNormal;
-    varying vec3 vPosition;
-    varying vec3 vWorldPosition;
+    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPosition.xyz;
 
-    void main() {
-      // Sample textures
-      vec3 dayColor = texture2D(dayTexture, vUv).rgb;
-      vec3 nightColor = texture2D(nightTexture, vUv).rgb;
-      vec4 bumpRoughnessClouds = texture2D(bumpRoughnessCloudsTexture, vUv);
+    // World-space normal (ok for uniform scale; if you ever non-uniform scale, use inverse-transpose)
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
 
-      // Sample imagery texture if available
-      vec3 imageryColor = texture2D(imageryTexture, vUv).rgb;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
 
-      // Extract channels
-      float bump = bumpRoughnessClouds.r;
-      float roughness = bumpRoughnessClouds.g;
-      float clouds = bumpRoughnessClouds.b;
+const fragmentShader = `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
 
-      // Cloud strength with smoothstep
-      float cloudsStrength = smoothstep(0.2, 1.0, clouds);
+  uniform sampler2D dayTexture;
+  uniform sampler2D nightTexture;
+  uniform sampler2D bumpRoughnessCloudsTexture;
+  uniform sampler2D imageryTexture;
+  uniform float useImagery;
+  uniform vec3 sunDirection;
+  uniform vec3 atmosphereDayColor;
+  uniform vec3 atmosphereTwilightColor;
+  uniform float roughnessLow;
+  uniform float roughnessHigh;
 
-      // Choose between day texture and imagery
-      vec3 actualDayColor = mix(dayColor, imageryColor, useImagery);
+  varying vec2 vUv;
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
 
-      // Mix day texture with white clouds
-      vec3 baseColor = mix(actualDayColor, vec3(1.0), cloudsStrength * 2.0);
+  void main() {
+    #include <logdepthbuf_fragment>
 
-      // Sun orientation (how much surface faces the sun)
-      vec3 normalizedSunDir = normalize(sunDirection);
-      float sunOrientation = dot(vNormal, normalizedSunDir);
+    vec3 dayColor = texture2D(dayTexture, vUv).rgb;
+    vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+    vec4 bumpRoughnessClouds = texture2D(bumpRoughnessCloudsTexture, vUv);
+    vec3 imageryColor = texture2D(imageryTexture, vUv).rgb;
 
-      // Day strength (transition from night to day)
-      float dayStrength = smoothstep(-0.25, 0.5, sunOrientation);
+    float clouds = bumpRoughnessClouds.b;
+    float cloudsStrength = smoothstep(0.2, 1.0, clouds);
 
-      // Fresnel effect (atmosphere glow at edges)
-      vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-      float fresnel = 1.0 - abs(dot(viewDirection, vNormal));
+    vec3 actualDayColor = mix(dayColor, imageryColor, useImagery);
+    vec3 baseColor = mix(actualDayColor, vec3(1.0), cloudsStrength * 2.0);
 
-      // Atmosphere color (twilight to day)
-      float atmosphereMix = smoothstep(-0.25, 0.75, sunOrientation);
-      vec3 atmosphereColor = mix(atmosphereTwilightColor, atmosphereDayColor, atmosphereMix);
+    vec3 normalizedSunDir = normalize(sunDirection);
 
-      // Atmosphere day strength
-      float atmosphereDayStrength = smoothstep(-0.5, 1.0, sunOrientation);
-      float atmosphereBlend = clamp(atmosphereDayStrength * pow(fresnel, 2.0), 0.0, 1.0);
+    // If you keep DoubleSide, flip normals for backfaces:
+    vec3 N = normalize(vWorldNormal);
+    if (!gl_FrontFacing) N *= -1.0;
 
-      // Combine night and day
-      vec3 finalColor = mix(nightColor, baseColor, dayStrength);
+    float sunOrientation = dot(N, normalizedSunDir);
+    float dayStrength = smoothstep(-0.25, 0.5, sunOrientation);
 
-      // Add atmosphere
-      finalColor = mix(finalColor, atmosphereColor, atmosphereBlend * 0.3);
+    vec3 finalColor = mix(nightColor, baseColor, dayStrength);
+    gl_FragColor = vec4(finalColor, 1.0);
+  }
+`;
 
-      gl_FragColor = vec4(finalColor, 1.0);
-    }
-  `;
 
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -236,29 +221,43 @@ export function createAtmosphereMaterial(colors, sunLight) {
   };
 
   const vertexShader = `
-    varying vec3 vNormal;
+    #include <common>
+    #include <logdepthbuf_pars_vertex>
+
+    varying vec3 vWorldNormal;
     varying vec3 vWorldPosition;
 
     void main() {
-      vNormal = normalize(normalMatrix * normal);
+      vWorldNormal = normalize(mat3(modelMatrix) * normal);
+
       vec4 worldPosition = modelMatrix * vec4(position, 1.0);
       vWorldPosition = worldPosition.xyz;
+
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      #include <logdepthbuf_vertex>
     }
   `;
 
   const fragmentShader = `
+    #include <common>
+    #include <logdepthbuf_pars_fragment>
+
     uniform vec3 sunDirection;
     uniform vec3 atmosphereDayColor;
     uniform vec3 atmosphereTwilightColor;
 
-    varying vec3 vNormal;
+    varying vec3 vWorldNormal;
     varying vec3 vWorldPosition;
 
     void main() {
+      #include <logdepthbuf_fragment>
+
+      vec3 N = normalize(vWorldNormal);
+      if (!gl_FrontFacing) N *= -1.0;
+
       // Sun orientation
       vec3 normalizedSunDir = normalize(sunDirection);
-      float sunOrientation = dot(vNormal, normalizedSunDir);
+      float sunOrientation = dot(N, normalizedSunDir);
 
       // Atmosphere color (twilight to day)
       float atmosphereMix = smoothstep(-0.25, 0.75, sunOrientation);
@@ -266,10 +265,9 @@ export function createAtmosphereMaterial(colors, sunLight) {
 
       // Fresnel effect
       vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-      float fresnel = 1.0 - abs(dot(viewDirection, vNormal));
+      float fresnel = 1.0 - abs(dot(viewDirection, N));
 
       // Alpha calculation matching TSL example
-      // fresnel.remap(0.73, 1, 1, 0).pow(3) = remap then pow
       float fresnelRemapped = 1.0 - ((fresnel - 0.73) / (1.0 - 0.73));
       fresnelRemapped = clamp(fresnelRemapped, 0.0, 1.0);
       float alpha = pow(fresnelRemapped, 3.0);
