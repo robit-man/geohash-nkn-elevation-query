@@ -31,7 +31,13 @@ export function createEarthMaterial(textures, sunLight, options = {}) {
     atmosphereDayColor = new THREE.Color('#4db2ff'),
     atmosphereTwilightColor = new THREE.Color('#bc490b'),
     roughnessLow = 0.25,
-    roughnessHigh = 0.35
+    roughnessHigh = 0.35,
+
+    // NEW: haze tuning (1 unit = 1 meter)
+    atmosphereScale = 1.04,     // must match atmosphereMesh.scale.setScalar(...)
+    hazeStrength = 0.85,        // overall haze amount on surface
+    hazeFalloff = 900000.0,     // meters: bigger = clearer; smaller = hazier (try 600000..1400000)
+    hazeMax = 0.85              // clamp so it never fully washes out
   } = options;
 
   // Ensure colors are THREE.Color objects
@@ -52,7 +58,12 @@ export function createEarthMaterial(textures, sunLight, options = {}) {
     atmosphereDayColor: { value: new THREE.Vector3(dayColor.r, dayColor.g, dayColor.b) },
     atmosphereTwilightColor: { value: new THREE.Vector3(twilightColor.r, twilightColor.g, twilightColor.b) },
     roughnessLow: { value: roughnessLow },
-    roughnessHigh: { value: roughnessHigh }
+    roughnessHigh: { value: roughnessHigh },
+    atmosphereScale: { value: atmosphereScale },
+    hazeStrength: { value: hazeStrength },
+    hazeFalloff: { value: hazeFalloff },
+    hazeMax: { value: hazeMax },
+
   };
 
 const vertexShader = `
@@ -77,52 +88,110 @@ const vertexShader = `
   }
 `;
 
-const fragmentShader = `
-  #include <common>
-  #include <logdepthbuf_pars_fragment>
+  const fragmentShader = `
+    #include <common>
+    #include <logdepthbuf_pars_fragment>
 
-  uniform sampler2D dayTexture;
-  uniform sampler2D nightTexture;
-  uniform sampler2D bumpRoughnessCloudsTexture;
-  uniform sampler2D imageryTexture;
-  uniform float useImagery;
-  uniform vec3 sunDirection;
-  uniform vec3 atmosphereDayColor;
-  uniform vec3 atmosphereTwilightColor;
-  uniform float roughnessLow;
-  uniform float roughnessHigh;
+    uniform sampler2D dayTexture;
+    uniform sampler2D nightTexture;
+    uniform sampler2D bumpRoughnessCloudsTexture;
+    uniform sampler2D imageryTexture;
+    uniform float useImagery;
 
-  varying vec2 vUv;
-  varying vec3 vWorldNormal;
-  varying vec3 vWorldPosition;
+    uniform vec3 sunDirection;
+    uniform vec3 atmosphereDayColor;
+    uniform vec3 atmosphereTwilightColor;
 
-  void main() {
-    #include <logdepthbuf_fragment>
+    uniform float roughnessLow;
+    uniform float roughnessHigh;
 
-    vec3 dayColor = texture2D(dayTexture, vUv).rgb;
-    vec3 nightColor = texture2D(nightTexture, vUv).rgb;
-    vec4 bumpRoughnessClouds = texture2D(bumpRoughnessCloudsTexture, vUv);
-    vec3 imageryColor = texture2D(imageryTexture, vUv).rgb;
+    // NEW haze uniforms
+    uniform float atmosphereScale;
+    uniform float hazeStrength;
+    uniform float hazeFalloff;
+    uniform float hazeMax;
 
-    float clouds = bumpRoughnessClouds.b;
-    float cloudsStrength = smoothstep(0.2, 1.0, clouds);
+    varying vec2 vUv;
+    varying vec3 vWorldNormal;
+    varying vec3 vWorldPosition;
 
-    vec3 actualDayColor = mix(dayColor, imageryColor, useImagery);
-    vec3 baseColor = mix(actualDayColor, vec3(1.0), cloudsStrength * 2.0);
+    // Entry distance along ray to sphere (center at origin). Returns 0 if camera is inside.
+    float raySphereEntryT(vec3 ro, vec3 rd, float r) {
+      float b = dot(ro, rd);
+      float c = dot(ro, ro) - r * r;
+      float h = b * b - c;
+      if (h <= 0.0) return 0.0;
+      float t = -b - sqrt(h);
+      return max(t, 0.0);
+    }
 
-    vec3 normalizedSunDir = normalize(sunDirection);
+    void main() {
+      #include <logdepthbuf_fragment>
 
-    // If you keep DoubleSide, flip normals for backfaces:
-    vec3 N = normalize(vWorldNormal);
-    if (!gl_FrontFacing) N *= -1.0;
+      vec3 dayColor = texture2D(dayTexture, vUv).rgb;
+      vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+      vec4 brc = texture2D(bumpRoughnessCloudsTexture, vUv);
+      vec3 imageryColor = texture2D(imageryTexture, vUv).rgb;
 
-    float sunOrientation = dot(N, normalizedSunDir);
-    float dayStrength = smoothstep(-0.25, 0.5, sunOrientation);
+      float clouds = brc.b;
+      float cloudsStrength = smoothstep(0.2, 1.0, clouds);
 
-    vec3 finalColor = mix(nightColor, baseColor, dayStrength);
-    gl_FragColor = vec4(finalColor, 1.0);
-  }
-`;
+      vec3 actualDayColor = mix(dayColor, imageryColor, useImagery);
+      vec3 baseColor = mix(actualDayColor, vec3(1.0), cloudsStrength * 2.0);
+
+      vec3 N = normalize(vWorldNormal);
+      if (!gl_FrontFacing) N *= -1.0;
+
+      vec3 sunDir = normalize(sunDirection);
+      float sunOrientation = dot(N, sunDir);
+
+      float dayStrength = smoothstep(-0.25, 0.5, sunOrientation);
+
+      // Twilight→day atmosphere color
+      float atmosphereMix = smoothstep(-0.25, 0.75, sunOrientation);
+      vec3 atmosphereColor = mix(atmosphereTwilightColor, atmosphereDayColor, atmosphereMix);
+
+      // Base day/night
+      vec3 finalColor = mix(nightColor, baseColor, dayStrength);
+
+      // ───────────────────────────────────────────────────────────
+      // NEW: Altitude-dependent “aerial perspective” haze on surface
+      // We approximate optical depth by: path length of camera→surface ray
+      // that lies inside the atmosphere sphere (radius = planetR*atmosphereScale).
+      // ───────────────────────────────────────────────────────────
+      vec3 C = cameraPosition; // assumes planet centered at origin
+      vec3 toP = vWorldPosition - C;
+      float tSurface = length(toP);
+      vec3 rd = toP / max(tSurface, 1e-6);
+
+      float planetR = length(vWorldPosition);
+      float atmR = planetR * atmosphereScale;
+
+      float tEntry = raySphereEntryT(C, rd, atmR);
+      float pathLen = max(0.0, tSurface - tEntry);
+
+      // Optical depth → haze amount
+      float haze = 1.0 - exp(-pathLen / max(hazeFalloff, 1.0));
+
+      // Reduce haze on deep night side but keep some limb glow
+      float sunFactor = 0.25 + 0.75 * smoothstep(-0.15, 0.25, sunOrientation);
+      haze *= sunFactor;
+
+      haze = clamp(haze * hazeStrength, 0.0, hazeMax);
+
+      // Apply haze as a tint toward atmosphere color
+      finalColor = mix(finalColor, atmosphereColor, haze);
+
+      // Optional: a tiny extra brightening for “milky” look near horizon
+      vec3 viewDir = normalize(C - vWorldPosition);
+      float mu = clamp(dot(N, viewDir), 0.0, 1.0);        // 1 = straight down, 0 = horizon
+      float horizon = pow(1.0 - mu, 2.0);
+      finalColor += atmosphereColor * (0.08 * horizon * haze);
+
+      gl_FragColor = vec4(finalColor, 1.0);
+    }
+  `;
+
 
 
   const material = new THREE.ShaderMaterial({
@@ -217,8 +286,15 @@ export function createAtmosphereMaterial(colors, sunLight) {
   const uniforms = {
     sunDirection: { value: new THREE.Vector3() },
     atmosphereDayColor: { value: new THREE.Vector3(dayColor.r, dayColor.g, dayColor.b) },
-    atmosphereTwilightColor: { value: new THREE.Vector3(twilightColor.r, twilightColor.g, twilightColor.b) }
+    atmosphereTwilightColor: { value: new THREE.Vector3(twilightColor.r, twilightColor.g, twilightColor.b) },
+
+    // NEW halo tuning (match your mesh scale)
+    atmosphereScale: { value: 1.04 },
+    haloStrength: { value: 1.35 },     // bigger = denser/stronger halo
+    haloPower: { value: 2.2 },         // smaller = thicker halo; larger = thinner ring
+    heightFade: { value: 1400000.0 }   // meters: larger keeps halo visible higher up
   };
+
 
   const vertexShader = `
     #include <common>
@@ -229,9 +305,8 @@ export function createAtmosphereMaterial(colors, sunLight) {
 
     void main() {
       vWorldNormal = normalize(mat3(modelMatrix) * normal);
-
-      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-      vWorldPosition = worldPosition.xyz;
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPosition = wp.xyz;
 
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       #include <logdepthbuf_vertex>
@@ -246,6 +321,11 @@ export function createAtmosphereMaterial(colors, sunLight) {
     uniform vec3 atmosphereDayColor;
     uniform vec3 atmosphereTwilightColor;
 
+    uniform float atmosphereScale;
+    uniform float haloStrength;
+    uniform float haloPower;
+    uniform float heightFade;
+
     varying vec3 vWorldNormal;
     varying vec3 vWorldPosition;
 
@@ -255,27 +335,42 @@ export function createAtmosphereMaterial(colors, sunLight) {
       vec3 N = normalize(vWorldNormal);
       if (!gl_FrontFacing) N *= -1.0;
 
-      // Sun orientation
-      vec3 normalizedSunDir = normalize(sunDirection);
-      float sunOrientation = dot(N, normalizedSunDir);
+      vec3 C = cameraPosition; // assumes planet centered at origin
+      vec3 viewDir = normalize(C - vWorldPosition);
 
-      // Atmosphere color (twilight to day)
+      vec3 sunDir = normalize(sunDirection);
+      float sunOrientation = dot(N, sunDir);
+
       float atmosphereMix = smoothstep(-0.25, 0.75, sunOrientation);
       vec3 atmosphereColor = mix(atmosphereTwilightColor, atmosphereDayColor, atmosphereMix);
 
-      // Fresnel effect
-      vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-      float fresnel = 1.0 - abs(dot(viewDirection, N));
+      // Fresnel ring
+      float fresnel = 1.0 - abs(dot(viewDir, N));
+      float ring = pow(clamp(fresnel, 0.0, 1.0), haloPower);
 
-      // Alpha calculation matching TSL example
-      float fresnelRemapped = 1.0 - ((fresnel - 0.73) / (1.0 - 0.73));
-      fresnelRemapped = clamp(fresnelRemapped, 0.0, 1.0);
-      float alpha = pow(fresnelRemapped, 3.0);
-      alpha = alpha * smoothstep(-0.5, 1.0, sunOrientation);
+      // Fade with altitude (stronger when you're lower in the atmosphere)
+      float topR = length(vWorldPosition);
+      float planetR = topR / max(atmosphereScale, 1e-6);
+      float height = max(0.0, length(C) - planetR);
+      float altFactor = exp(-height / max(heightFade, 1.0)); // 1 near ground → small in space
 
+      // Keep some halo visible from space, but boost near-surface density
+      float density = mix(0.18, 1.0, clamp(altFactor, 0.0, 1.0));
+
+      // A touch of forward scattering toward the sun (nice “hot spot”)
+      float sunSpot = pow(max(dot(-viewDir, sunDir), 0.0), 10.0);
+
+      float alpha = haloStrength * density * ring;
+      alpha += 0.35 * sunSpot * ring;
+
+      // Never fully disappear on the night side; just reduce
+      alpha *= (0.25 + 0.75 * smoothstep(-0.2, 0.25, sunOrientation));
+
+      alpha = clamp(alpha, 0.0, 1.0);
       gl_FragColor = vec4(atmosphereColor, alpha);
     }
   `;
+
 
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -326,7 +421,22 @@ export function updateEarthMaterialUniforms(material, updates) {
   if (updates.roughnessHigh !== undefined) {
     uniforms.roughnessHigh.value = updates.roughnessHigh;
   }
+
+  // NEW haze controls
+  if (updates.atmosphereScale !== undefined) {
+    uniforms.atmosphereScale.value = updates.atmosphereScale;
+  }
+  if (updates.hazeStrength !== undefined) {
+    uniforms.hazeStrength.value = updates.hazeStrength;
+  }
+  if (updates.hazeFalloff !== undefined) {
+    uniforms.hazeFalloff.value = updates.hazeFalloff;
+  }
+  if (updates.hazeMax !== undefined) {
+    uniforms.hazeMax.value = updates.hazeMax;
+  }
 }
+
 
 /**
  * Create simple fallback material (if textures fail to load)
