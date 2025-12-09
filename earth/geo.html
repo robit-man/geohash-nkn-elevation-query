@@ -912,7 +912,7 @@
         const SUN_RADIUS_M = 696_000_000; // 696,000 km
         const SUN_EARTH_DISTANCE_M = 149_597_870_700; // 1 AU = ~149.6 million km
 
-        const CAMERA_NEAR = 1000;
+        const CAMERA_NEAR = 0.1;
         const CAMERA_FAR = SUN_EARTH_DISTANCE_M * 2; // Far enough to see the sun
 
         const ALT_30K_UNITS = 30_000;
@@ -2335,10 +2335,222 @@
             const controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.08;
-            controls.minDistance = PLANET_RADIUS * 1.0001; // Very close to surface
+            controls.minDistance = PLANET_RADIUS + 2.0;
             controls.maxDistance = PLANET_RADIUS * 10.0;
             controls.target.set(0, 0, 0);
             controls.enablePan = false; // Keep focus on globe center
+
+            // ────────────────────────────────────────────────────────
+            // Surface FPV controller (true "on-ground" mode)
+            // ────────────────────────────────────────────────────────
+            const SURFACE_EYE_HEIGHT = 1.6;          // meters above surface
+            const SURFACE_ENTER_ALT = 80;            // meters (below this in LOD "zoom" mode -> enter surface)
+            const SURFACE_TRANSITION_MS = 900;
+
+            controls.minDistance = PLANET_RADIUS + SURFACE_EYE_HEIGHT;
+
+            let cameraMode = 'orbit'; // 'orbit' | 'toSurface' | 'surface' | 'toOrbit'
+
+            const surfaceState = {
+            up: new THREE.Vector3(0, 1, 0),
+            yaw: 0,
+            pitch: 0,
+            dragging: false,
+            lastX: 0,
+            lastY: 0,
+            sens: 0.0022,
+            };
+
+            let camTransition = null;
+
+            const _wNorth = new THREE.Vector3(0, 1, 0);
+            const _vA = new THREE.Vector3();
+            const _vB = new THREE.Vector3();
+            const _vC = new THREE.Vector3();
+            const _look = new THREE.Vector3();
+            const _target = new THREE.Vector3();
+            const _tmpObj = new THREE.Object3D();
+
+            function computeTangentBasis(up, outEast, outNorth) {
+            outEast.crossVectors(_wNorth, up);
+            if (outEast.lengthSq() < 1e-8) outEast.set(1, 0, 0); // pole fallback
+            outEast.normalize();
+            outNorth.crossVectors(up, outEast).normalize();
+            }
+
+            function setSurfaceFromDir(upDir, preserveLook = true) {
+            surfaceState.up.copy(upDir).normalize();
+
+            const east = _vA, north = _vB;
+            computeTangentBasis(surfaceState.up, east, north);
+
+            if (preserveLook) camera.getWorldDirection(_look);
+            else _look.copy(north).negate();
+
+            const up = surfaceState.up;
+            const upComp = _look.dot(up);
+
+            surfaceState.pitch = THREE.MathUtils.clamp(
+                Math.asin(THREE.MathUtils.clamp(upComp, -1, 1)),
+                -1.45, 1.45
+            );
+
+            // tangent component for yaw
+            _look.addScaledVector(up, -upComp);
+            if (_look.lengthSq() < 1e-8) _look.copy(north);
+            _look.normalize();
+
+            surfaceState.yaw = Math.atan2(_look.dot(east), _look.dot(north));
+            }
+
+            function surfaceLookDir(out) {
+            const up = surfaceState.up;
+            const east = _vA, north = _vB;
+            computeTangentBasis(up, east, north);
+
+            // dirT = north*cos(yaw) + east*sin(yaw)
+            out.copy(north).multiplyScalar(Math.cos(surfaceState.yaw));
+            out.addScaledVector(east, Math.sin(surfaceState.yaw));
+            out.normalize();
+
+            // look = dirT*cos(pitch) + up*sin(pitch)
+            out.multiplyScalar(Math.cos(surfaceState.pitch));
+            out.addScaledVector(up, Math.sin(surfaceState.pitch));
+            return out.normalize();
+            }
+
+            function applySurfaceCamera() {
+            const up = surfaceState.up;
+
+            camera.position.copy(up).multiplyScalar(PLANET_RADIUS + SURFACE_EYE_HEIGHT);
+            camera.up.copy(up);
+
+            surfaceLookDir(_look);
+            _target.copy(camera.position).add(_look);
+            camera.lookAt(_target);
+            }
+
+            function startCamTransition(endPos, endQuat, nextMode) {
+            camTransition = {
+                t0: performance.now(),
+                dur: SURFACE_TRANSITION_MS,
+                startPos: camera.position.clone(),
+                startQuat: camera.quaternion.clone(),
+                endPos: endPos.clone(),
+                endQuat: endQuat.clone(),
+                nextMode
+            };
+            }
+
+            function updateCamTransition() {
+            if (!camTransition) return false;
+
+            const t = (performance.now() - camTransition.t0) / camTransition.dur;
+            const a = THREE.MathUtils.clamp(t, 0, 1);
+            const e = a * a * (3 - 2 * a); // smoothstep
+
+            camera.position.lerpVectors(camTransition.startPos, camTransition.endPos, e);
+            camera.quaternion.slerpQuaternions(camTransition.startQuat, camTransition.endQuat, e);
+
+            if (a >= 1) {
+                cameraMode = camTransition.nextMode;
+                camTransition = null;
+
+                if (cameraMode === 'surface') {
+                controls.enabled = false;
+                camera.near = 0.1;
+                camera.updateProjectionMatrix();
+                applySurfaceCamera(); // snap exact eye height + horizon look
+                } else {
+                controls.enabled = true;
+                camera.near = CAMERA_NEAR;
+                camera.updateProjectionMatrix();
+                controls.target.set(0, 0, 0);
+                controls.update();
+                }
+                return false;
+            }
+            return true;
+            }
+
+            function enterSurfaceAt(dir) {
+            setSurfaceFromDir(dir, true);
+
+            const up = surfaceState.up;
+            const endPos = up.clone().multiplyScalar(PLANET_RADIUS + SURFACE_EYE_HEIGHT);
+
+            // build end quaternion from desired surface look
+            surfaceLookDir(_look);
+            _tmpObj.position.copy(endPos);
+            _tmpObj.up.copy(up);
+            _tmpObj.lookAt(_target.copy(endPos).add(_look));
+            const endQuat = _tmpObj.quaternion.clone();
+
+            cameraMode = 'toSurface';
+            startCamTransition(endPos, endQuat, 'surface');
+            }
+
+            function updateCameraController() {
+            // Transition in progress?
+            if (updateCamTransition()) return;
+
+            const alt = camera.position.length() - PLANET_RADIUS;
+
+            if (cameraMode === 'orbit') {
+                controls.enabled = true;
+
+                // keep orbit stable around center (prevents “orbit around surface point” insanity)
+                controls.target.set(0, 0, 0);
+                controls.update();
+
+                // If you are in LOD "zoom" mode and close enough, enter surface FPV
+                if (lodMode === 'zoom' && alt < SURFACE_ENTER_ALT) {
+                enterSurfaceAt(camera.position.clone().normalize());
+                }
+                return;
+            }
+
+            if (cameraMode === 'surface') {
+                applySurfaceCamera();
+            }
+            }
+
+            // Mouse-look while in surface mode
+            renderer.domElement.addEventListener('pointerdown', (e) => {
+            if (cameraMode !== 'surface') return;
+            if (e.button !== 0) return;
+            if (isEditableTarget(e.target)) return;
+            surfaceState.dragging = true;
+            surfaceState.lastX = e.clientX;
+            surfaceState.lastY = e.clientY;
+            renderer.domElement.setPointerCapture?.(e.pointerId);
+            });
+
+            renderer.domElement.addEventListener('pointermove', (e) => {
+            if (cameraMode !== 'surface' || !surfaceState.dragging) return;
+            const dx = e.clientX - surfaceState.lastX;
+            const dy = e.clientY - surfaceState.lastY;
+            surfaceState.lastX = e.clientX;
+            surfaceState.lastY = e.clientY;
+
+            surfaceState.yaw   -= dx * surfaceState.sens;
+            surfaceState.pitch -= dy * surfaceState.sens;
+            surfaceState.pitch = THREE.MathUtils.clamp(surfaceState.pitch, -1.45, 1.45);
+            });
+
+            renderer.domElement.addEventListener('pointerup', (e) => {
+            if (cameraMode !== 'surface') return;
+            surfaceState.dragging = false;
+            try { renderer.domElement.releasePointerCapture?.(e.pointerId); } catch {}
+            });
+
+            // Double-click: zoom to surface at clicked point
+            renderer.domElement.addEventListener('dblclick', (e) => {
+            if (isEditableTarget(e.target)) return;
+            const hit = getSphereIntersectionFromEvent(e, renderer, camera);
+            if (!hit) return;
+            enterSurfaceAt(hit.clone().normalize());
+            });
 
             // Dynamic lighting system with real astronomical distances
             const lightingSystem = new LightingSystem(scene, PLANET_RADIUS, SUN_EARTH_DISTANCE_M);
@@ -2759,7 +2971,8 @@
             });
 
             // Pointer: Shift+click to set hex patch
-            renderer.domElement.addEventListener('pointerdown', (e) => {
+                renderer.domElement.addEventListener('pointerdown', (e) => {
+                if (cameraMode === 'surface') return;
                 if (e.button !== 0) return;
                 if (!e.shiftKey) return;
                 if (isEditableTarget(e.target)) return;
@@ -2816,8 +3029,7 @@
                 perfEnd('lighting');
 
                 perfStart('controls');
-                controls.update();
-                autoTilt(camera, controls);
+                updateCameraController();
                 perfEnd('controls');
 
                 perfStart('lod');
