@@ -9,12 +9,12 @@
   <script src="https://cdn.jsdelivr.net/gh/nknorg/nkn-sdk-js/dist/nkn.min.js"
           onerror="(function(){var s=document.createElement('script');s.src='https://nkn.org/nkn.min.js';document.head.appendChild(s);}())"></script>
 
-  <!-- Three.js via import map -->
+  <!-- Three.js via import map (TSL/WebGPU included in main module) -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
     }
   }
   </script>
@@ -516,6 +516,7 @@
       </div>
       <div id="sidebar-tabs">
         <button class="sidebar-tab active" data-tab="overview">Overview</button>
+        <button class="sidebar-tab" data-tab="lighting">Lighting / Time</button>
         <button class="sidebar-tab" data-tab="elevation">Elevation / NKN</button>
         <button class="sidebar-tab" data-tab="imagery">Imagery &amp; LOD</button>
       </div>
@@ -657,6 +658,89 @@
           </div>
         </div>
 
+        <!-- Lighting / Time -->
+        <div class="sidebar-page" data-page="lighting">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Sun Position & Time</div>
+            <div class="sidebar-section-subtitle">
+              Real-time astronomical sun position with Earth's 23.44° axial tilt.
+            </div>
+
+            <div class="field-group">
+              <label>Current Date</label>
+              <input id="cfg-date" type="date" />
+            </div>
+
+            <div class="field-group">
+              <label>Time of Day (UTC)</label>
+              <div class="field-row-inline">
+                <input id="cfg-time" type="time" step="60" />
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label>Time Speed</label>
+              <div class="field-row-inline">
+                <span id="cfg-timeSpeedLabel">Paused</span>
+                <input id="cfg-timeSpeed" type="number" min="0" max="3600" step="1" value="0" />
+              </div>
+              <div class="field-note">
+                Multiplier: 0=paused, 1=real-time, 60=1min/sec, 3600=1hr/sec
+              </div>
+            </div>
+
+            <div style="margin-top:8px; display:flex; gap:4px; flex-wrap:wrap;">
+              <button id="btn-timeNow" class="mode-btn-small active">Now</button>
+              <button id="btn-timeSunrise" class="mode-btn-small">Sunrise</button>
+              <button id="btn-timeNoon" class="mode-btn-small">Noon</button>
+              <button id="btn-timeSunset" class="mode-btn-small">Sunset</button>
+              <button id="btn-timeMidnight" class="mode-btn-small">Midnight</button>
+            </div>
+
+            <div class="chip-toggle" style="margin-top:8px;">
+              <input id="cfg-useSimplified" type="checkbox" checked />
+              <label for="cfg-useSimplified">Simplified mode (faster)</label>
+            </div>
+
+            <div class="field-note" style="margin-top:4px;">
+              Simplified mode uses time-of-day only. Disable for full astronomical calculation with lat/lng.
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Atmosphere Settings</div>
+
+            <div class="field-group">
+              <label>Day Color</label>
+              <input id="cfg-atmDayColor" type="color" value="#4db2ff" />
+            </div>
+
+            <div class="field-group">
+              <label>Twilight Color</label>
+              <input id="cfg-atmTwilightColor" type="color" value="#bc490b" />
+            </div>
+
+            <div class="chip-toggle" style="margin-top:8px;">
+              <input id="cfg-atmosphereEnabled" type="checkbox" checked />
+              <label for="cfg-atmosphereEnabled">Show atmosphere</label>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Sun Info</div>
+            <div class="metric-list">
+              <div class="metric-row">
+                <span class="metric-label">Current time</span>
+                <span class="metric-value" id="metric-currentTime">–</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Sun direction</span>
+                <span class="metric-value" id="metric-sunDir">–</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Imagery & LOD -->
         <div class="sidebar-page" data-page="imagery">
           <div class="sidebar-section">
@@ -753,15 +837,23 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+  // Import our custom modules
+  import { LightingSystem } from './modules/lighting-system.js';
+  import { createEarthMaterial, createAtmosphereMaterial } from './modules/earth-material.js';
+  import { loadEarthTexturesWithFallback } from './modules/texture-loader.js';
+
   // ──────────────────────────────────────────────────────────────
   // Constants & helpers (Earth scale, meters)
   // ──────────────────────────────────────────────────────────────
 
-  const EARTH_RADIUS_M = 6_371_000;
+  // Real-world astronomical constants (1 unit = 1 meter)
+  const EARTH_RADIUS_M = 6_371_000; // 6,371 km
   const PLANET_RADIUS = EARTH_RADIUS_M;
+  const SUN_RADIUS_M = 696_000_000; // 696,000 km
+  const SUN_EARTH_DISTANCE_M = 149_597_870_700; // 1 AU = ~149.6 million km
 
-  const CAMERA_NEAR = 100;
-  const CAMERA_FAR  = PLANET_RADIUS * 5;
+  const CAMERA_NEAR = 1000;
+  const CAMERA_FAR = SUN_EARTH_DISTANCE_M * 2; // Far enough to see the sun
 
   const ALT_30K_UNITS = 30_000;
   const ALT_10K_UNITS = 10_000;
@@ -1601,6 +1693,8 @@
       this.scene.add(this.group);
 
       this.rootTiles = createIcosahedronTiles(radius, elevationClient);
+
+      // Material will be set via setMaterial() after texture loading
       this.material = new THREE.MeshStandardMaterial({
         color: 0x4b5563,
         metalness: 0.0,
@@ -1662,6 +1756,23 @@
         const t = stack.pop();
         t.clearImagery();
         if (t.children) stack.push(...t.children);
+      }
+    }
+
+    setMaterial(newMaterial) {
+      // Update material reference
+      this.material = newMaterial;
+
+      // Update all existing tile meshes
+      const stack = [...this.rootTiles];
+      while (stack.length) {
+        const tile = stack.pop();
+        if (tile.mesh) {
+          tile.mesh.material = newMaterial;
+        }
+        if (tile.children) {
+          stack.push(...tile.children);
+        }
       }
     }
 
@@ -1894,6 +2005,23 @@
     const imageryPreviewImg = document.getElementById('imageryPreview');
     const imageryUrlEl = document.getElementById('imageryUrl');
 
+    // Lighting / Time controls
+    const cfgDate = document.getElementById('cfg-date');
+    const cfgTime = document.getElementById('cfg-time');
+    const cfgTimeSpeed = document.getElementById('cfg-timeSpeed');
+    const cfgTimeSpeedLabel = document.getElementById('cfg-timeSpeedLabel');
+    const cfgUseSimplified = document.getElementById('cfg-useSimplified');
+    const cfgAtmDayColor = document.getElementById('cfg-atmDayColor');
+    const cfgAtmTwilightColor = document.getElementById('cfg-atmTwilightColor');
+    const cfgAtmosphereEnabled = document.getElementById('cfg-atmosphereEnabled');
+    const btnTimeNow = document.getElementById('btn-timeNow');
+    const btnTimeSunrise = document.getElementById('btn-timeSunrise');
+    const btnTimeNoon = document.getElementById('btn-timeNoon');
+    const btnTimeSunset = document.getElementById('btn-timeSunset');
+    const btnTimeMidnight = document.getElementById('btn-timeMidnight');
+    const metricCurrentTime = document.getElementById('metric-currentTime');
+    const metricSunDir = document.getElementById('metric-sunDir');
+
     const LS_RELAY = 'nkn.globe.relay';
     const LS_DATASET = 'nkn.globe.dataset';
 
@@ -1940,14 +2068,15 @@
       });
     });
 
-    // Renderer / scene / camera
-    const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+    // Renderer / scene / camera (WebGL2 with logarithmic depth for astronomical scale)
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      logarithmicDepthBuffer: true // Required for Earth-Sun scale (1m to 150M km)
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
-    renderer.physicallyCorrectLights = true;
     container.appendChild(renderer.domElement);
     renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -1966,32 +2095,83 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = PLANET_RADIUS * 1.001;
-    controls.maxDistance = PLANET_RADIUS * 8.0;
+    controls.minDistance = PLANET_RADIUS * 1.0001; // Very close to surface
+    controls.maxDistance = PLANET_RADIUS * 10.0;
     controls.target.set(0, 0, 0);
+    controls.enablePan = false; // Keep focus on globe center
 
-    // Lighting rig
-    const ambient = new THREE.AmbientLight(0x404040, 0.65);
-    scene.add(ambient);
+    // Dynamic lighting system with real astronomical distances
+    const lightingSystem = new LightingSystem(scene, PLANET_RADIUS, SUN_EARTH_DISTANCE_M);
 
-    const hemi = new THREE.HemisphereLight(0x93c5fd, 0x020617, 0.5);
-    hemi.position.set(0, PLANET_RADIUS * 2, 0);
-    scene.add(hemi);
+    // Initialize with current time
+    lightingSystem.updateSunPosition(new Date());
 
-    const sun = new THREE.DirectionalLight(0xfff3e0, 1.5);
-    sun.position.set(PLANET_RADIUS * 3, PLANET_RADIUS * 2, PLANET_RADIUS * 1.5);
-    sun.target.position.set(0, 0, 0);
-    sun.castShadow = false;
-    scene.add(sun);
-    scene.add(sun.target);
+    // Set time speed (0 = paused, 1 = real-time, 60 = 1 minute per second, etc.)
+    lightingSystem.setTimeSpeed(0); // Start paused, can be controlled via UI
 
-    const fill = new THREE.DirectionalLight(0x88caff, 0.3);
-    fill.position.set(-PLANET_RADIUS * 2, PLANET_RADIUS * 0.5, -PLANET_RADIUS);
-    scene.add(fill);
+    // Add visual sun sphere at real size and distance
+    const sunGeometry = new THREE.SphereGeometry(SUN_RADIUS_M, 32, 32);
+    const sunMaterial = new THREE.MeshBasicMaterial({
+      color: '#FDB813',
+      emissive: '#FDB813',
+      emissiveIntensity: 1.0
+    });
+    const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+    sunMesh.name = 'SunVisual';
+    scene.add(sunMesh);
+
+    // Function to update sun visual position to match light
+    function updateSunVisual() {
+      sunMesh.position.copy(lightingSystem.sun.position);
+    }
+    updateSunVisual();
 
     const elevationClient = new ElevationClient();
     const imageryManager = new ImageryManager();
     triTree = new TriTreeManager(scene, elevationClient, imageryManager, PLANET_RADIUS);
+
+    // ═══════════════════════════════════════════════════════════════
+    // Load Earth textures and create TSL materials (async)
+    // ═══════════════════════════════════════════════════════════════
+    let atmosphereMesh = null;
+
+    (async function initEarthMaterials() {
+      try {
+        console.log('Loading Earth textures...');
+        const textures = await loadEarthTexturesWithFallback('./textures/', '4096');
+
+        if (textures.usingFallback) {
+          console.warn('Using fallback textures - download real textures for better visuals');
+        }
+
+        // Create Earth material with TSL shaders
+        const earthMaterial = createEarthMaterial(textures, lightingSystem.sun, {
+          atmosphereDayColor: '#4db2ff',
+          atmosphereTwilightColor: '#bc490b',
+          roughnessLow: 0.25,
+          roughnessHigh: 0.35
+        });
+
+        // Update all tiles to use new material
+        triTree.setMaterial(earthMaterial);
+
+        // Create atmosphere shell
+        const atmosphereGeometry = new THREE.SphereGeometry(PLANET_RADIUS, 64, 64);
+        const atmosphereMaterial = createAtmosphereMaterial(
+          { day: '#4db2ff', twilight: '#bc490b' },
+          lightingSystem.sun
+        );
+
+        atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+        atmosphereMesh.scale.setScalar(1.04);
+        atmosphereMesh.name = 'Atmosphere';
+        scene.add(atmosphereMesh);
+
+        console.log('Earth materials initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize Earth materials:', error);
+      }
+    })();
 
     // Hex selector visualization
     const hexGeometry = new THREE.BufferGeometry();
@@ -2232,6 +2412,101 @@
         url;
     });
 
+    // ═══════════════════════════════════════════════════════════════
+    // Lighting / Time UI Controls
+    // ═══════════════════════════════════════════════════════════════
+
+    // Initialize date/time inputs with current values
+    function updateTimeInputsFromLighting() {
+      const timeInfo = lightingSystem.getTimeInfo();
+      const date = timeInfo.date;
+
+      cfgDate.valueAsDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      cfgTime.value = `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+      cfgTimeSpeed.value = lightingSystem.timeSpeed;
+
+      // Update label
+      if (lightingSystem.timeSpeed === 0) {
+        cfgTimeSpeedLabel.textContent = 'Paused';
+      } else if (lightingSystem.timeSpeed === 1) {
+        cfgTimeSpeedLabel.textContent = 'Real-time';
+      } else {
+        cfgTimeSpeedLabel.textContent = `${lightingSystem.timeSpeed}×`;
+      }
+    }
+    updateTimeInputsFromLighting();
+
+    // Date/time change handlers
+    cfgDate.addEventListener('change', () => {
+      const newDate = new Date(lightingSystem.currentDate);
+      const inputDate = cfgDate.valueAsDate;
+      if (inputDate) {
+        newDate.setUTCFullYear(inputDate.getFullYear());
+        newDate.setUTCMonth(inputDate.getMonth());
+        newDate.setUTCDate(inputDate.getDate());
+        lightingSystem.setDate(newDate);
+      }
+    });
+
+    cfgTime.addEventListener('change', () => {
+      if (cfgTime.value) {
+        const [hours, minutes] = cfgTime.value.split(':').map(Number);
+        lightingSystem.setTimeOfDay(hours, minutes || 0);
+      }
+    });
+
+    cfgTimeSpeed.addEventListener('input', () => {
+      const speed = parseFloat(cfgTimeSpeed.value) || 0;
+      lightingSystem.setTimeSpeed(speed);
+      updateTimeInputsFromLighting();
+    });
+
+    cfgUseSimplified.addEventListener('change', () => {
+      lightingSystem.setSimplifiedMode(cfgUseSimplified.checked);
+    });
+
+    // Time preset buttons
+    btnTimeNow.addEventListener('click', () => {
+      lightingSystem.setDate(new Date());
+      updateTimeInputsFromLighting();
+    });
+
+    btnTimeSunrise.addEventListener('click', () => {
+      lightingSystem.setTimeOfDay(6, 0);
+      updateTimeInputsFromLighting();
+    });
+
+    btnTimeNoon.addEventListener('click', () => {
+      lightingSystem.setTimeOfDay(12, 0);
+      updateTimeInputsFromLighting();
+    });
+
+    btnTimeSunset.addEventListener('click', () => {
+      lightingSystem.setTimeOfDay(18, 0);
+      updateTimeInputsFromLighting();
+    });
+
+    btnTimeMidnight.addEventListener('click', () => {
+      lightingSystem.setTimeOfDay(0, 0);
+      updateTimeInputsFromLighting();
+    });
+
+    // Atmosphere controls
+    cfgAtmosphereEnabled.addEventListener('change', () => {
+      if (atmosphereMesh) {
+        atmosphereMesh.visible = cfgAtmosphereEnabled.checked;
+      }
+    });
+
+    cfgAtmDayColor.addEventListener('change', () => {
+      // Update atmosphere colors (will be implemented when materials are loaded)
+      console.log('Atmosphere day color:', cfgAtmDayColor.value);
+    });
+
+    cfgAtmTwilightColor.addEventListener('change', () => {
+      console.log('Atmosphere twilight color:', cfgAtmTwilightColor.value);
+    });
+
     // Debug toggle
     debugToggle.addEventListener('click', () => {
       perf.enabled = !perf.enabled;
@@ -2294,6 +2569,12 @@
         perf.frameStart = performance.now();
       }
 
+      perfStart('lighting');
+      // Update sun position based on time progression
+      lightingSystem.update(dt);
+      updateSunVisual(); // Sync visual sun sphere with light position
+      perfEnd('lighting');
+
       perfStart('controls');
       controls.update();
       autoTilt(camera, controls);
@@ -2355,6 +2636,12 @@
       } else {
         metricRatio.textContent = '–';
       }
+
+      // Update sun/time metrics
+      const timeInfo = lightingSystem.getTimeInfo();
+      const sunDir = lightingSystem.getSunDirection();
+      metricCurrentTime.textContent = `${String(timeInfo.hours).padStart(2, '0')}:${String(timeInfo.minutes).padStart(2, '0')} UTC`;
+      metricSunDir.textContent = `(${sunDir.x.toFixed(2)}, ${sunDir.y.toFixed(2)}, ${sunDir.z.toFixed(2)})`;
 
       // Lat/lon at view center
       let latlonStr = '–';
